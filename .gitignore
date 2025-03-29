@@ -1,0 +1,4 @@
+/target
+
+# Ignore directories containing test posts
+/*posts
