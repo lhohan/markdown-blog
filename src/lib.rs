@@ -5,6 +5,7 @@ use pulldown_cmark::{html, Options, Parser};
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tera::{Context, Tera};
 
 // Create the app with a default content directory
 pub fn create_app() -> Router {
@@ -41,12 +42,22 @@ struct FrontMatter {
 
 pub struct BlogPostHandler {
     content_dir: PathBuf,
+    templates: Tera,
 }
 
 impl BlogPostHandler {
     pub fn new<P: Into<PathBuf>>(content_dir: P) -> Self {
+        let templates = match Tera::new("templates/**/*.html") {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("Template parsing error(s): {}", e);
+                Tera::default()
+            }
+        };
+
         Self {
             content_dir: content_dir.into(),
+            templates,
         }
     }
 
@@ -70,37 +81,25 @@ impl BlogPostHandler {
         let mut html_content = String::new();
         html::push_html(&mut html_content, parser);
 
-        // Create the complete HTML with the title
-        let html_output = format!(
-            r#"<!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{}</title>
-        <style>
-            body {{
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 1rem;
-            }}
-            h1 {{
-                color: #222;
-            }}
-        </style>
-    </head>
-    <body>
-        <h1>{}</h1>
-        {}
-    </body>
-    </html>"#,
-            front_matter.title, front_matter.title, html_content
-        );
+        let mut context = Context::new();
+        context.insert("title", &front_matter.title);
+        context.insert("content", &html_content);
+        if let Some(date_str) = &front_matter.publish_date {
+            // Try to parse the date using multiple possible formats
+            let formatted_date = format_date(date_str);
+            context.insert("date", &formatted_date);
+        }
+        // context.insert("date", &front_matter.publish_date);
+        //
+        // if let Some(tags) = &front_matter.tags {
+        // context.insert("tags", tags);
+        // }
 
-        Ok(html_output)
+        // Create the complete HTML with the title
+        self.templates.render("post.html", &context).map_err(|e| {
+            eprintln!("Template error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
     }
 
     fn find_post_by_slug(&self, slug: &str) -> Result<PathBuf, StatusCode> {
@@ -145,4 +144,75 @@ fn parse_front_matter(content: &str) -> Option<FrontMatter> {
 
     // Try to parse the YAML string into our FrontMatter structure
     serde_yaml::from_str::<FrontMatter>(yaml_text.as_str()).ok()
+}
+
+fn format_date(date_str: &str) -> String {
+    // First try the JavaScript date format (e.g., "Fri Dec 06 2024 12:36:53 GMT+0000")
+    if let Ok(datetime) = chrono::DateTime::parse_from_str(
+        // Remove the (Coordinated Universal Time) part if present
+        date_str.split(" (").next().unwrap_or(date_str),
+        "%a %b %d %Y %H:%M:%S GMT%z",
+    ) {
+        return datetime.format("%B %d, %Y").to_string();
+    }
+
+    // Try simple YYYY-MM-DD format
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+        return date.format("%B %d, %Y").to_string();
+    }
+
+    // Try "Month Day, Year" format (e.g., "Dec 6, 2024")
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%b %d, %Y") {
+        return date.format("%B %d, %Y").to_string();
+    }
+
+    // If all parsing attempts fail, return the original string
+    date_str.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_date_js_format() {
+        // JavaScript date format
+        let input = "Fri Dec 06 2024 12:36:53 GMT+0000 (Coordinated Universal Time)";
+        let expected = "December 06, 2024";
+        assert_eq!(format_date(input), expected);
+    }
+
+    #[test]
+    fn test_format_date_js_format_without_timezone_name() {
+        // JavaScript date format without timezone name in parentheses
+        let input = "Fri Dec 06 2024 12:36:53 GMT+0000";
+        let expected = "December 06, 2024";
+        assert_eq!(format_date(input), expected);
+    }
+
+    #[test]
+    fn test_format_date_iso_format() {
+        // Simple ISO format
+        let input = "2024-12-06";
+        let expected = "December 06, 2024";
+        assert_eq!(format_date(input), expected);
+    }
+
+    #[test]
+    fn test_format_date_invalid_format() {
+        // Invalid format should return the original string
+        let input = "Invalid date";
+        let expected = "Invalid date";
+        assert_eq!(format_date(input), expected);
+    }
+
+    #[test]
+    fn test_format_date_mixed_format() {
+        // Another common format
+        let input = "Dec 6, 2024";
+
+        // With our new implementation, this format is now supported
+        let expected = "December 06, 2024";
+        assert_eq!(format_date(input), expected);
+    }
 }
