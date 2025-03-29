@@ -33,7 +33,9 @@ async fn post_handler(
 #[derive(Deserialize, Debug)]
 struct FrontMatter {
     title: String,
-    date: String,
+    #[serde(alias = "datePublished")]
+    publish_date: Option<String>,
+    #[serde(default)]
     slug: Option<String>,
 }
 
@@ -58,6 +60,8 @@ impl BlogPostHandler {
         // Extract front matter and content using YAML engine
         let matter = Matter::<YAML>::new();
         let result = matter.parse(&content);
+
+        // Parse the front matter
         let front_matter = parse_front_matter(&content).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
         // Parse the markdown to HTML
@@ -69,52 +73,57 @@ impl BlogPostHandler {
         // Create the complete HTML with the title
         let html_output = format!(
             r#"<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{}</title>
-            <style>
-                body {{
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
-                    max-width: 800px;
-                    margin: 0 auto;
-                    padding: 1rem;
-                }}
-                h1 {{
-                    color: #222;
-                }}
-            </style>
-        </head>
-        <body>
-            <h1>{}</h1>
-            {}
-        </body>
-        </html>"#,
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{}</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 1rem;
+            }}
+            h1 {{
+                color: #222;
+            }}
+        </style>
+    </head>
+    <body>
+        <h1>{}</h1>
+        {}
+    </body>
+    </html>"#,
             front_matter.title, front_matter.title, html_content
         );
 
-        dbg!(&html_output);
         Ok(html_output)
     }
 
     fn find_post_by_slug(&self, slug: &str) -> Result<PathBuf, StatusCode> {
+        dbg!(&slug);
         let posts_dir = self.content_dir.join("posts");
         for entry in std::fs::read_dir(posts_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)? {
             let entry = entry.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             let path = entry.path();
+
             if path.extension().map_or(false, |ext| ext == "md") {
                 let content = std::fs::read_to_string(&path).map_err(|_| StatusCode::NOT_FOUND)?;
+
+                // Try to parse front matter
                 if let Some(front_matter) = parse_front_matter(&content) {
-                    // Check if front matter has a slug and it matches
+                    // Check if front matter has a slug that matches
                     if let Some(front_matter_slug) = &front_matter.slug {
                         if front_matter_slug == slug {
                             return Ok(path);
                         }
                     }
                 }
+
+                // If no match by front matter slug, check if the filename (without extension) matches
                 if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
                     if file_stem == slug {
                         return Ok(path);

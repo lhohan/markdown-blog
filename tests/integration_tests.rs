@@ -46,7 +46,7 @@ async fn test_can_serve_single_blog_post() {
     // Create a test blog post with front matter
     let post_content = r#"---
 title: Test Post
-date: 2023-01-01
+datePublished: 2023-01-01
 ---
 # Hello World
 
@@ -91,7 +91,7 @@ async fn test_can_serve_single_blog_post_with_slug_from_frontmatter() {
 
     let post_content = r#"---
 title: Test Post
-date: 2023-01-01
+datePublished: 2023-01-01
 slug: abc123
 ---
 # Hello World
