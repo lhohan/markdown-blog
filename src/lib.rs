@@ -31,7 +31,7 @@ async fn post_handler(
     Ok(Html(html))
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 struct FrontMatter {
     title: Option<String>,
     #[serde(alias = "datePublished")]
@@ -72,8 +72,7 @@ impl BlogPostHandler {
         let matter = Matter::<YAML>::new();
         let result = matter.parse(&content);
 
-        // Parse the front matter
-        let front_matter = parse_front_matter(&content).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let front_matter = parse_front_matter(&content).unwrap_or_default();
 
         // Parse the markdown to HTML
         let options = Options::empty();
@@ -82,7 +81,9 @@ impl BlogPostHandler {
         html::push_html(&mut html_content, parser);
 
         let mut context = Context::new();
-        context.insert("title", &front_matter.title);
+        if let Some(title) = &front_matter.title {
+            context.insert("title", title);
+        }
         context.insert("content", &html_content);
         if let Some(date_str) = &front_matter.publish_date {
             // Try to parse the date using multiple possible formats
@@ -142,15 +143,13 @@ fn parse_front_matter(content: &str) -> Option<FrontMatter> {
     let yaml_text = result.matter;
 
     // Try to parse the YAML string into our FrontMatter structure
-    dbg!(
-        match serde_yaml::from_str::<FrontMatter>(yaml_text.as_str()) {
-            Ok(front_matter) => Some(front_matter),
-            Err(e) => {
-                eprintln!("Error parsing front matter: {}", e);
-                None
-            }
+    match serde_yaml::from_str::<FrontMatter>(yaml_text.as_str()) {
+        Ok(front_matter) => Some(front_matter),
+        Err(e) => {
+            eprintln!("Error parsing front matter: {}", e);
+            None
         }
-    )
+    }
 }
 
 fn format_date(date_str: &str) -> String {

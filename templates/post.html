@@ -1,15 +1,17 @@
-{% extends "base.html" %} {% block title %}{{ title }} | Your Blog{% endblock %}
-{% block additional_styles %} .post-header { margin-bottom: 2rem; } .post-title
-{ margin-bottom: 0.5rem; } .post-meta { color: var(--muted-color); font-size:
-0.9rem; margin-bottom: 1.5rem; } .post-content { margin-bottom: 2rem; }
-.post-tags { margin-top: 2rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.post-tag { background-color: #f1f1f1; padding: 0.2rem 0.6rem; border-radius:
-3px; font-size: 0.8rem; color: var(--muted-color); text-decoration: none; }
-.post-tag:hover { background-color: #e1e1e1; text-decoration: none; } {%
-endblock %} {% block content %}
+{% extends "base.html" %} {% if title %}{% block title %}{{ title }} | Your
+Blog{% endblock %} {% endif %} {% block additional_styles %} .post-header {
+margin-bottom: 2rem; } .post-title { margin-bottom: 0.5rem; } .post-meta {
+color: var(--muted-color); font-size: 0.9rem; margin-bottom: 1.5rem; }
+.post-content { margin-bottom: 2rem; } .post-tags { margin-top: 2rem; display:
+flex; flex-wrap: wrap; gap: 0.5rem; } .post-tag { background-color: #f1f1f1;
+padding: 0.2rem 0.6rem; border-radius: 3px; font-size: 0.8rem; color:
+var(--muted-color); text-decoration: none; } .post-tag:hover { background-color:
+#e1e1e1; text-decoration: none; } {% endblock %} {% block content %}
 <article class="post">
     <header class="post-header">
+        {% if title %}
         <h1 class="post-title">{{ title }}</h1>
+        {% endif %}
         <div class="post-meta">
             {% if date %}Published on {{date}} {% endif %} {% if author %} by {{
             author }} {% endif %}
