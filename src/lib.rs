@@ -33,7 +33,7 @@ async fn post_handler(
 
 #[derive(Deserialize, Debug)]
 struct FrontMatter {
-    title: String,
+    title: Option<String>,
     #[serde(alias = "datePublished")]
     publish_date: Option<String>,
     #[serde(default)]
@@ -89,7 +89,6 @@ impl BlogPostHandler {
             let formatted_date = format_date(date_str);
             context.insert("date", &formatted_date);
         }
-        // context.insert("date", &front_matter.publish_date);
         //
         // if let Some(tags) = &front_matter.tags {
         // context.insert("tags", tags);
@@ -143,7 +142,15 @@ fn parse_front_matter(content: &str) -> Option<FrontMatter> {
     let yaml_text = result.matter;
 
     // Try to parse the YAML string into our FrontMatter structure
-    serde_yaml::from_str::<FrontMatter>(yaml_text.as_str()).ok()
+    dbg!(
+        match serde_yaml::from_str::<FrontMatter>(yaml_text.as_str()) {
+            Ok(front_matter) => Some(front_matter),
+            Err(e) => {
+                eprintln!("Error parsing front matter: {}", e);
+                None
+            }
+        }
+    )
 }
 
 fn format_date(date_str: &str) -> String {

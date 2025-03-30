@@ -129,3 +129,47 @@ This is a test blog post.
     assert!(body.contains("Hello World"));
     assert!(body.contains("This is a test blog post."));
 }
+
+#[tokio::test]
+async fn test_can_serve_blog_post_without_front_matter() {
+    // Create a temporary directory for test blog posts
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    // Create a test blog post WITHOUT front matter
+    let post_content = r#"# Raw Markdown Post
+
+This is a blog post without any front matter.
+It should still be displayed properly."#;
+
+    fs::create_dir_all(temp_path.join("posts")).unwrap();
+    fs::write(temp_path.join("posts/no-front-matter.md"), post_content).unwrap();
+
+    // Start the server with our content directory
+    let app = create_app_with_content_dir(temp_path);
+    let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let server_addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    // Make a request to the post endpoint
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/no-front-matter", server_addr))
+        .send()
+        .await
+        .expect("Failed to send request");
+
+    // Assert that the response has a 200 status code
+    assert_eq!(response.status().as_u16(), 200);
+
+    // Assert that the response body contains our post content and default title
+    let body = response.text().await.expect("Failed to get response body");
+    assert!(body.contains("<h1>Raw Markdown Post</h1>"));
+    assert!(body.contains("This is a blog post without any front matter."));
+}
