@@ -238,7 +238,6 @@ title: Another Undated Post A (should be first among undated, alphabetically)
         .contains("Newest Post (Full Format)")
         .contains("Undated Post Z")
         .contains("Another Undated Post A")
-        // Then verify the order - we'll check adjacent pairs to confirm sorting
         .contains_in_order(&[
             "Newest Post (Full Format)",
             "Newer Post (Short Format)",
