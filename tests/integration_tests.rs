@@ -3,7 +3,7 @@ use specification_support::IntoAssertion;
 use crate::specification_support::BlogServer;
 
 #[tokio::test]
-async fn test_happy_endpoint_returns_200() {
+async fn test_health_endpoint_returns_200() {
     BlogServer::empty()
         .start()
         .await
@@ -86,6 +86,33 @@ It should still be displayed properly."#;
     .contains("This is a blog post without any front matter.")
     .verify()
     .await;
+}
+
+#[tokio::test]
+async fn returns_404_on_nonexistent_posts() {
+    BlogServer::empty()
+        .start()
+        .await
+        .get("/non-existent-post")
+        .await
+        .expect()
+        .status(404)
+        .verify()
+        .await;
+}
+
+#[tokio::test]
+async fn returns_404_on_nonexistent_post() {
+    BlogServer::empty()
+        .add_file("posts/abc123", "content")
+        .start()
+        .await
+        .get("/non-existent-post")
+        .await
+        .expect()
+        .status(404)
+        .verify()
+        .await;
 }
 
 mod specification_support {
