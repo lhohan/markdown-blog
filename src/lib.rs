@@ -110,7 +110,8 @@ impl BlogPostHandler {
             let path = entry.path();
 
             if path.extension().map_or(false, |ext| ext == "md") {
-                let content = std::fs::read_to_string(&path).map_err(|_| StatusCode::NOT_FOUND)?;
+                let content = std::fs::read_to_string(&path)
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
                 // Try to parse front matter
                 if let Some(front_matter) = parse_front_matter(&content) {
