@@ -3,7 +3,7 @@ use specification_support::IntoAssertion;
 use crate::specification_support::BlogServer;
 
 #[tokio::test]
-async fn test_health_endpoint_returns_200() {
+async fn health_endpoint_returns_200() {
     BlogServer::empty()
         .start()
         .await
@@ -17,7 +17,7 @@ async fn test_health_endpoint_returns_200() {
 }
 
 #[tokio::test]
-async fn test_can_serve_single_blog_post() {
+async fn can_serve_single_blog_post() {
     let post_content = r#"---
 title: Test Post
 datePublished: 2023-01-01
@@ -41,7 +41,7 @@ This is a test blog post.
 }
 
 #[tokio::test]
-async fn test_can_serve_single_blog_post_with_slug_from_frontmatter() {
+async fn can_serve_single_blog_post_with_slug_from_frontmatter() {
     let post_content = r#"---
 title: Test Post
 datePublished: 2023-01-01
@@ -66,7 +66,7 @@ This is a test blog post.
 }
 
 #[tokio::test]
-async fn test_can_serve_blog_post_without_front_matter() {
+async fn can_serve_blog_post_without_front_matter() {
     let post_content_without_front_matter = r#"# Raw Markdown Post
 
 This is a blog post without any front matter.
@@ -111,6 +111,146 @@ async fn returns_404_on_nonexistent_post() {
         .await
         .expect()
         .status(404)
+        .verify()
+        .await;
+}
+
+#[tokio::test]
+async fn index_page_shows_blog_posts() {
+    let post1 = r#"---
+title: First Post
+datePublished: 2023-01-02
+---
+# First Post Content
+"#;
+
+    let post2 = r#"---
+title: Second Post
+datePublished: 2023-01-01
+---
+# Second Post Content
+"#;
+
+    BlogServer::empty()
+        .add_file("posts/first-post.md", post1)
+        .add_file("posts/second-post.md", post2)
+        .start()
+        .await
+        .get("/")
+        .await
+        .expect()
+        .status(200)
+        .contains("First Post")
+        .contains("Second Post")
+        .verify()
+        .await;
+}
+
+#[tokio::test]
+async fn index_page_no_post_when_no_posts() {
+    BlogServer::empty()
+        .start()
+        .await
+        .get("/")
+        .await
+        .expect()
+        .status(200)
+        .contains("No posts yet.")
+        .verify()
+        .await;
+}
+
+#[tokio::test]
+async fn index_page_sorts_posts_by_date_newest_first() {
+    // Create posts with various date formats spanning different years
+    let posts = [
+        (
+            "posts/oldest-post.md",
+            r#"---
+title: Oldest Post
+datePublished: 2020-01-15
+---
+# Oldest Post Content
+"#,
+        ),
+        (
+            "posts/middle-post-js-date.md",
+            r#"---
+title: Middle Post (JS Date)
+datePublished: Wed Jun 15 2022 10:30:00 GMT+0000
+---
+# Middle Post Content with JS Date Format
+"#,
+        ),
+        (
+            "posts/newer-post-short-format.md",
+            r#"---
+title: Newer Post (Short Format)
+datePublished: Mar 20, 2023
+---
+# Newer Post with Short Date Format
+"#,
+        ),
+        (
+            "posts/newest-post-full-format.md",
+            r#"---
+title: Newest Post (Full Format)
+datePublished: December 25, 2024
+---
+# Newest Post with Full Month Format
+"#,
+        ),
+        (
+            "posts/undated-post.md",
+            r#"---
+title: Undated Post Z (should be last, alphabetically)
+---
+# Undated Post Content
+"#,
+        ),
+        (
+            "posts/another-undated-post.md",
+            r#"---
+title: Another Undated Post A (should be first among undated, alphabetically)
+---
+# Another Undated Post Content
+"#,
+        ),
+    ];
+
+    // Set up the server with all posts
+    let mut server = BlogServer::empty();
+    for (path, content) in posts {
+        server = server.add_file(path, content);
+    }
+
+    // Get the index page
+    let response = server.start().await.get("/").await;
+
+    // Check the response
+    response
+        .expect()
+        .status(200)
+        // First verify all posts are present
+        .contains("Oldest Post")
+        .contains("Middle Post (JS Date)")
+        .contains("Newer Post (Short Format)")
+        .contains("Newest Post (Full Format)")
+        .contains("Undated Post Z")
+        .contains("Another Undated Post A")
+        // Then verify the order - we'll check adjacent pairs to confirm sorting
+        .contains_in_order(&[
+            "Newest Post (Full Format)",
+            "Newer Post (Short Format)",
+            "Middle Post (JS Date)",
+            "Oldest Post",
+        ])
+        // Verify undated posts come after dated posts, sorted alphabetically
+        .contains_in_order(&[
+            "Oldest Post",            // Last dated post
+            "Another Undated Post A", // First undated post (alphabetically)
+            "Undated Post Z",         // Second undated post (alphabetically)
+        ])
         .verify()
         .await;
 }
@@ -282,6 +422,54 @@ mod specification_support {
                     body
                 );
             }));
+            self
+        }
+
+        // TODO: Review this implementation. Seems to work but copy-pasted from Claude.
+        pub fn contains_in_order(mut self, substrings: &[&str]) -> Self {
+            // Clone the substrings for the closure
+            let substrings: Vec<String> = substrings.iter().map(|s| s.to_string()).collect();
+
+            self.expectations.push(Box::new(move |body| {
+                    let mut last_pos = 0;
+
+                    for (i, substring) in substrings.iter().enumerate() {
+                        match body[last_pos..].find(substring) {
+                            Some(pos) => {
+                                // Update position for next search
+                                last_pos += pos + substring.len();
+                            }
+                            None => {
+                                assert!(
+                                    false,
+                                    "Expected to find '{}' after position {}. Items should appear in order: {:?}. Full body:\n{}",
+                                    substring,
+                                    last_pos,
+                                    substrings,
+                                    body
+                                );
+                            }
+                        }
+
+                        // For all but the last item, ensure the next item comes after this one
+                        if i < substrings.len() - 1 {
+                            let next = &substrings[i + 1];
+                            match body[last_pos..].find(next) {
+                                Some(_) => { /* This is good, the next item appears after this one */ }
+                                None => {
+                                    assert!(
+                                        false,
+                                        "Expected to find '{}' after '{}', but it was not found. Full body:\n{}",
+                                        next,
+                                        substring,
+                                        body
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }));
+
             self
         }
 

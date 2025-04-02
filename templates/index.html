@@ -1,0 +1,22 @@
+{% extends "base.html" %} {% block title %}Your Blog{% endblock %} {% block
+additional_styles %} .post { margin-bottom: 1.5rem; border-bottom: 1px solid
+#eee; padding-bottom: 1rem; } .post:last-child { border-bottom: none; }
+.post-title { font-size: 1.4rem; font-weight: bold; margin-bottom: 0.5rem; }
+.post-date { color: var(--muted-color); font-size: 0.9rem; margin-bottom:
+0.5rem; } {% endblock %} {% block content %} {% if posts and posts | length > 0
+%}
+<div class="posts">
+    {% for post in posts %}
+    <div class="post">
+        <div class="post-title">
+            <a href="/{{ post.slug }}">{{ post.title }}</a>
+        </div>
+        {% if post.publish_date %}
+        <div class="post-date">{{ post.publish_date }}</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p>No posts yet.</p>
+{% endif %} {% endblock %}
