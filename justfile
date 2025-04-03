@@ -7,9 +7,13 @@ build:
 check-w:
     cargo watch -c -x check
 
-# Run the 'tt' app
+# Run the server
 run:
     cargo run -- --help
+
+# Run the server with restart on changes
+run-w:
+    cargo watch -w src -w templates -w static -c -x 'test -- --nocapture' -x run
 
 test:
     cargo test
