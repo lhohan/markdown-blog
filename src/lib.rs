@@ -1,7 +1,13 @@
 mod config;
 pub use config::BlogConfig;
 
-use axum::{extract::Path, http::StatusCode, response::Html, routing::get, Router};
+use axum::{
+    extract::Path,
+    http::StatusCode,
+    response::Html,
+    routing::{get, get_service},
+    Router,
+};
 use gray_matter::engine::YAML;
 use gray_matter::Matter;
 use pulldown_cmark::{html, Options, Parser};
@@ -9,6 +15,7 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tera::{Context, Tera};
+use tower_http::services::ServeDir;
 
 pub fn create_app_with_defaults() -> Router {
     create_app_with_content_dir(".")
@@ -23,10 +30,18 @@ pub fn create_app_with_content_dir<P: Into<PathBuf> + Clone>(content_dir: P) -> 
 fn create_app<P: Into<PathBuf> + Clone>(content_dir: P, config: BlogConfig) -> Router {
     let blog_handler = Arc::new(BlogPostHandler::new(content_dir.clone(), config));
 
+    let static_service = get_service(ServeDir::new("static")).handle_error(|error| async move {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Error serving static file: {}", error),
+        )
+    });
+
     Router::new()
         .route("/health", get(|| async { "I'm ok!" }))
         .route("/", get(index_handler))
         .route("/:slug", get(post_handler))
+        .nest_service("/static", static_service)
         .layer(axum::extract::Extension(blog_handler))
 }
 

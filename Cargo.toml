@@ -13,7 +13,7 @@ serde_yaml = "0.9.34"
 tera = "1.19.0"
 tokio = { version = "1.34.0", features = ["full"] }
 tower = "0.4.13"
-tower-http = { version = "0.5.0", features = ["trace"] }
+tower-http = { version = "0.5.0", features = ["trace", "fs"] }
 
 [dev-dependencies]
 reqwest = "0.11.22"
