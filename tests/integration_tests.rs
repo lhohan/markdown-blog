@@ -254,6 +254,27 @@ title: Another Undated Post A (should be first among undated, alphabetically)
         .await;
 }
 
+#[tokio::test]
+async fn custom_site_title_appears_in_page() {
+    let config = r#"
+site_title: "My Custom Blog"
+site_description: "A custom blog description"
+"#;
+
+    BlogServer::empty()
+        .with_config(config)
+        .start()
+        .await
+        .get("/")
+        .await
+        .expect()
+        .status(200)
+        .contains("My Custom Blog")
+        .not_contains("Your Blog") // the default site title
+        .verify()
+        .await;
+}
+
 mod specification_support {
     use blog_engine::create_app_with_content_dir;
     use std::fs;
@@ -262,12 +283,14 @@ mod specification_support {
 
     pub struct BlogServer {
         content_on_server: Vec<FileOnServer>,
+        config: Option<String>,
     }
 
     impl BlogServer {
         pub fn empty() -> Self {
             BlogServer {
                 content_on_server: Vec::new(),
+                config: None,
             }
         }
 
@@ -277,6 +300,7 @@ mod specification_support {
                     target_path: target_path.to_string(),
                     content: content.to_string(),
                 }],
+                config: None,
             }
         }
 
@@ -289,7 +313,15 @@ mod specification_support {
             let mut content_on_server = self.content_on_server;
             content_on_server.push(new_file);
 
-            BlogServer { content_on_server }
+            BlogServer {
+                content_on_server,
+                ..self
+            }
+        }
+
+        pub fn with_config(mut self, config_yaml: &str) -> Self {
+            self.config = Some(config_yaml.to_string());
+            self
         }
 
         pub async fn start(self) -> RunningServer {
@@ -305,6 +337,11 @@ mod specification_support {
                 }
 
                 fs::write(&file, &file_on_server.content).unwrap();
+            }
+
+            if let Some(config_content) = self.config {
+                let config_file = temp_path.join("blog_config.yaml");
+                fs::write(&config_file, &config_content).unwrap();
             }
 
             let app = create_app_with_content_dir(&temp_path);
@@ -469,6 +506,19 @@ mod specification_support {
                     }
                 }));
 
+            self
+        }
+
+        pub fn not_contains(mut self, substring: &str) -> Self {
+            let substring = substring.to_string();
+            self.expectations.push(Box::new(move |body| {
+                assert!(
+                    !body.contains(&substring),
+                    "Response body should not contain '{}'. Full body:\n{}",
+                    substring,
+                    body
+                );
+            }));
             self
         }
 

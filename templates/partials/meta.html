@@ -1,8 +1,5 @@
 <meta
     name="description"
-    content="{% block meta_description %}Your blog description{% endblock %}"
+    content="{% block meta_description %}{{ site_description }}{% endblock %}"
 />
-<link
-    rel="canonical"
-    href="{{ current_url | default(value='https://yourblog.com') }}"
-/>
+<link rel="canonical" href="{{ current_url }}" />

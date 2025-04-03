@@ -1,3 +1,6 @@
+mod config;
+pub use config::BlogConfig;
+
 use axum::{extract::Path, http::StatusCode, response::Html, routing::get, Router};
 use gray_matter::engine::YAML;
 use gray_matter::Matter;
@@ -7,14 +10,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tera::{Context, Tera};
 
-// Create the app with a default content directory
-pub fn create_app() -> Router {
+pub fn create_app_with_defaults() -> Router {
     create_app_with_content_dir(".")
 }
 
-// Create the app with a specific content directory
 pub fn create_app_with_content_dir<P: Into<PathBuf> + Clone>(content_dir: P) -> Router {
-    let blog_handler = Arc::new(BlogPostHandler::new(content_dir.clone()));
+    let config_path = content_dir.clone().into().join("blog_config.yaml");
+    let config = BlogConfig::from_file_or_default(config_path);
+    create_app(content_dir, config)
+}
+
+fn create_app<P: Into<PathBuf> + Clone>(content_dir: P, config: BlogConfig) -> Router {
+    let blog_handler = Arc::new(BlogPostHandler::new(content_dir.clone(), config));
 
     Router::new()
         .route("/health", get(|| async { "I'm ok!" }))
@@ -57,10 +64,11 @@ struct BlogPost {
 pub struct BlogPostHandler {
     content_dir: PathBuf,
     templates: Tera,
+    config: BlogConfig,
 }
 
 impl BlogPostHandler {
-    pub fn new<P: Into<PathBuf>>(content_dir: P) -> Self {
+    pub fn new<P: Into<PathBuf>>(content_dir: P, config: BlogConfig) -> Self {
         let templates = match Tera::new("templates/**/*.html") {
             Ok(t) => t,
             Err(e) => {
@@ -72,13 +80,14 @@ impl BlogPostHandler {
         Self {
             content_dir: content_dir.into(),
             templates,
+            config,
         }
     }
 
     pub async fn list_posts(&self) -> Result<String, StatusCode> {
         let posts = self.get_all_posts()?;
 
-        let mut context = Self::build_base_context("/");
+        let mut context = self.build_base_context("/");
         context.insert("posts", &posts);
 
         self.templates.render("index.html", &context).map_err(|e| {
@@ -195,7 +204,7 @@ impl BlogPostHandler {
         let mut html_content = String::new();
         html::push_html(&mut html_content, parser);
 
-        let mut context = Self::build_base_context(&format!("/{}", slug));
+        let mut context = self.build_base_context(&format!("/{}", slug));
         if let Some(title) = &front_matter.title {
             context.insert("title", title);
         }
@@ -249,13 +258,17 @@ impl BlogPostHandler {
         Err(StatusCode::NOT_FOUND)
     }
 
-    fn build_base_context(path: &str) -> Context {
+    fn build_base_context(&self, path: &str) -> Context {
         let mut context = Context::new();
+
+        let config = &self.config;
 
         // Add common values needed by all templates
         let now = chrono::Local::now();
         context.insert("now", &now.to_rfc3339());
         context.insert("current_url", path);
+        context.insert("site_title", &config.site_title);
+        context.insert("site_description", &config.site_description);
 
         context
     }
