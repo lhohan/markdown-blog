@@ -242,7 +242,7 @@ impl BlogPostHandler {
     }
 
     fn find_post_by_slug(&self, slug: &str) -> Result<PathBuf, StatusCode> {
-        println!("Requested post: {}", &slug);
+        log::info!("Requested post: {}", &slug);
         let posts_dir = self.content_dir.join("posts");
         for entry in std::fs::read_dir(posts_dir).map_err(|_| StatusCode::NOT_FOUND)? {
             let entry = entry.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
