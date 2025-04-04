@@ -1,5 +1,5 @@
-{% extends "base.html" %} {% block content %} {% if posts and posts | length > 0
-%}
+{% extends "base.html" %} {% block title %}Blog | {{ site_title }}{% endblock %}
+{% block content %} {% if posts and posts | length > 0 %}
 <div class="posts">
     <h1>Articles</h1>
     <ul>
