@@ -40,6 +40,7 @@ fn create_app<P: Into<PathBuf> + Clone>(content_dir: P, config: BlogConfig) -> R
     Router::new()
         .route("/health", get(|| async { "I'm ok!" }))
         .route("/", get(index_handler))
+        .route("/p/:slug", get(page_handler))
         .route("/:slug", get(post_handler))
         .nest_service("/static", static_service)
         .layer(axum::extract::Extension(blog_handler))
@@ -49,6 +50,14 @@ async fn index_handler(
     blog_handler: axum::extract::Extension<Arc<BlogPostHandler>>,
 ) -> Result<Html<String>, StatusCode> {
     let html = blog_handler.list_posts().await?;
+    Ok(Html(html))
+}
+
+async fn page_handler(
+    Path(slug): Path<String>,
+    blog_handler: axum::extract::Extension<Arc<BlogPostHandler>>,
+) -> Result<Html<String>, StatusCode> {
+    let html = blog_handler.render_page(slug).await?;
     Ok(Html(html))
 }
 
@@ -199,6 +208,38 @@ impl BlogPostHandler {
             .collect();
 
         Ok(posts)
+    }
+
+    pub async fn render_page(&self, slug: String) -> Result<String, StatusCode> {
+        log::info!("Requested page: {}", &slug);
+        let pages_dir = self.content_dir.join("pages");
+        let pages_path = pages_dir.join(format!("{}.md", &slug));
+
+        // Try to read the file
+        let content = std::fs::read_to_string(pages_path).map_err(|_| StatusCode::NOT_FOUND)?;
+
+        // Extract front matter and content using YAML engine
+        let matter = Matter::<YAML>::new();
+        let result = matter.parse(&content);
+
+        let front_matter = parse_front_matter(&content).unwrap_or_default();
+
+        // Parse the markdown to HTML
+        let options = Options::empty();
+        let parser = Parser::new_ext(&result.content, options);
+        let mut html_content = String::new();
+        html::push_html(&mut html_content, parser);
+
+        let mut context = self.build_base_context(&format!("/p/{}", slug));
+        if let Some(title) = &front_matter.title {
+            context.insert("title", title);
+        }
+        context.insert("content", &html_content);
+
+        self.templates.render("page.html", &context).map_err(|e| {
+            eprintln!("Template error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
     }
 
     pub async fn render_post(&self, slug: String) -> Result<String, StatusCode> {

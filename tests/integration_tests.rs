@@ -275,6 +275,26 @@ site_description: "A custom blog description"
         .await;
 }
 
+#[tokio::test]
+async fn can_serve_pages() {
+    let page_content = r#"# Raw Page Title
+
+This is a page without any front matter.
+It should still be displayed properly."#;
+
+    BlogServer::empty()
+        .add_file("pages/about.md", page_content)
+        .start()
+        .await
+        .get("/p/about")
+        .await
+        .expect()
+        .status(200)
+        .contains("<h1>Raw Page Title</h1>")
+        .verify()
+        .await;
+}
+
 mod specification_support {
     use blog_engine::create_app_with_content_dir;
     use std::fs;
