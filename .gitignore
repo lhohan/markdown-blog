@@ -1,4 +1,7 @@
 /target
 
-# Ignore directories containing test posts
+# Ignore content testing directories
 /*posts
+/*pages
+/*docs
+/blog_config.yaml
