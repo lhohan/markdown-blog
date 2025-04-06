@@ -1,4 +1,6 @@
+mod blog_repository;
 mod config;
+use blog_repository::{BlogRepository, FileSystemBlogRepository, RepositoryError};
 pub use config::BlogConfig;
 
 use axum::{
@@ -28,7 +30,8 @@ pub fn create_app_with_content_dir<P: Into<PathBuf> + Clone>(content_dir: P) -> 
 }
 
 fn create_app<P: Into<PathBuf> + Clone>(content_dir: P, config: BlogConfig) -> Router {
-    let blog_handler = Arc::new(BlogPostHandler::new(content_dir.clone(), config));
+    let repo = FileSystemBlogRepository::new(content_dir.clone().into());
+    let blog_handler = Arc::new(BlogPostHandler::new(config, repo));
 
     let static_service = get_service(ServeDir::new("static")).handle_error(|error| async move {
         (
@@ -78,6 +81,70 @@ struct FrontMatter {
     slug: Option<String>,
 }
 
+pub struct Markdown {
+    title: Option<String>,
+    content: String,
+    repo_slug: Option<String>,
+    publish_date: Option<chrono::NaiveDate>,
+}
+
+struct ParsedContent {
+    front_matter: Option<FrontMatter>,
+    content: String,
+}
+
+impl Markdown {
+    pub fn from_str(text: &str) -> Self {
+        let parsed = Self::parse_front_matter(text);
+        match parsed.front_matter {
+            Some(front_matter) => Markdown {
+                title: front_matter.title,
+                content: parsed.content,
+                publish_date: front_matter
+                    .publish_date
+                    .and_then(|s| parse_date_for_sorting(s.as_str())),
+                repo_slug: front_matter.slug,
+            },
+            None => Markdown {
+                title: None,
+                content: parsed.content,
+                publish_date: None,
+                repo_slug: None,
+            },
+        }
+    }
+
+    pub fn slug(&self) -> String {
+        self.repo_slug
+            .clone()
+            .expect("Markdown from repo should always contain slug") // todo: make self.title String?
+    }
+
+    fn parse_front_matter(content: &str) -> ParsedContent {
+        // Extract the YAML front matter
+        let matter = Matter::<YAML>::new();
+        let result = matter.parse(content);
+
+        // The matter.parse extracts the YAML as a string
+        let yaml_text = result.matter;
+
+        // Try to parse the YAML string into our FrontMatter structure
+        match serde_yaml::from_str::<FrontMatter>(yaml_text.as_str()) {
+            Ok(front_matter) => ParsedContent {
+                front_matter: Some(front_matter),
+                content: result.content,
+            },
+            Err(e) => {
+                eprintln!("Error parsing front matter: {}", e);
+                ParsedContent {
+                    front_matter: None,
+                    content: result.content,
+                }
+            }
+        }
+    }
+}
+
 #[derive(serde::Serialize)]
 struct BlogPost {
     title: String,
@@ -85,14 +152,15 @@ struct BlogPost {
     slug: String,
 }
 
+type ThreadSafeBlogRepository = Arc<dyn BlogRepository + Send + Sync>;
 pub struct BlogPostHandler {
-    content_dir: PathBuf,
+    repo: ThreadSafeBlogRepository,
     templates: Tera,
     config: BlogConfig,
 }
 
 impl BlogPostHandler {
-    pub fn new<P: Into<PathBuf>>(content_dir: P, config: BlogConfig) -> Self {
+    pub fn new(config: BlogConfig, blog_repo: impl BlogRepository + Send + Sync + 'static) -> Self {
         let templates = match Tera::new("templates/**/*.html") {
             Ok(t) => t,
             Err(e) => {
@@ -101,8 +169,10 @@ impl BlogPostHandler {
             }
         };
 
+        let repo = Arc::new(blog_repo);
+
         Self {
-            content_dir: content_dir.into(),
+            repo,
             templates,
             config,
         }
@@ -121,89 +191,14 @@ impl BlogPostHandler {
     }
 
     fn get_all_posts(&self) -> Result<Vec<BlogPost>, StatusCode> {
-        let posts_dir = self.content_dir.join("posts");
+        let markdowns = self.repo.get_all_posts().map_err(Self::into)?;
 
-        if !posts_dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        // Temporary struct for sorting
-        struct PostWithDate {
-            post: BlogPost,
-            date: Option<chrono::NaiveDate>,
-        }
-
-        let mut posts_with_dates = Vec::new();
-
-        for entry in std::fs::read_dir(posts_dir).map_err(|_| StatusCode::NOT_FOUND)? {
-            let entry = entry.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-            let path = entry.path();
-
-            if path.extension().map_or(true, |ext| ext != "md") {
-                continue;
-            }
-
-            let content =
-                std::fs::read_to_string(&path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-            let front_matter = parse_front_matter(&content).unwrap_or_default();
-
-            // TODO: There is some duplication here with `find_post_by_slug` (e.g. the order of first trying frontmatter for the slug)
-            let slug = if let Some(slug) = front_matter.slug {
-                slug
-            } else if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
-                file_stem.to_string()
-            } else {
-                continue; // Skip files without valid slugs
-            };
-
-            let post = BlogPost {
-                title: front_matter.title.unwrap_or_else(|| "Untitled".to_string()),
-                publish_date: front_matter.publish_date.clone(),
-                slug,
-            };
-
-            let parsed_date = front_matter
-                .publish_date
-                .as_ref()
-                .and_then(|d| parse_date_for_sorting(d));
-
-            posts_with_dates.push(PostWithDate {
-                post,
-                date: parsed_date,
-            });
-        }
-
-        fn by_title_alphabetically(a: &PostWithDate, b: &PostWithDate) -> std::cmp::Ordering {
-            a.post.title.cmp(&b.post.title)
-        }
-
-        fn by_newest_first(
-            date_a: &chrono::NaiveDate,
-            date_b: &chrono::NaiveDate,
-        ) -> std::cmp::Ordering {
-            date_b.cmp(date_a)
-        }
-
-        // Sort by parsed date
-        posts_with_dates.sort_by(|a, b| match (&a.date, &b.date) {
-            (Some(date_a), Some(date_b)) => by_newest_first(date_a, date_b),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => by_title_alphabetically(a, b),
-        });
-
-        // Extract sorted posts and format dates for display
-        let posts = posts_with_dates
+        let posts = markdowns
             .into_iter()
-            .map(|post_with_date| BlogPost {
-                title: post_with_date.post.title,
-                publish_date: post_with_date
-                    .post
-                    .publish_date
-                    .as_ref()
-                    .map(|date_str| format_date(date_str)),
-                slug: post_with_date.post.slug,
+            .map(|markdown| BlogPost {
+                title: markdown.title.clone().unwrap_or("Untitled".to_string()),
+                publish_date: markdown.publish_date.map(format_date),
+                slug: markdown.slug(),
             })
             .collect();
 
@@ -212,29 +207,12 @@ impl BlogPostHandler {
 
     pub async fn render_page(&self, slug: String) -> Result<String, StatusCode> {
         log::info!("Requested page: {}", &slug);
-        let pages_dir = self.content_dir.join("pages");
-        let pages_path = pages_dir.join(format!("{}.md", &slug));
-
-        // Try to read the file
-        let content = std::fs::read_to_string(pages_path).map_err(|_| StatusCode::NOT_FOUND)?;
-
-        // Extract front matter and content using YAML engine
-        let matter = Matter::<YAML>::new();
-        let result = matter.parse(&content);
-
-        let front_matter = parse_front_matter(&content).unwrap_or_default();
-
-        // Parse the markdown to HTML
-        let options = Options::empty();
-        let parser = Parser::new_ext(&result.content, options);
-        let mut html_content = String::new();
-        html::push_html(&mut html_content, parser);
+        let page = self.repo.get_page(&slug).map_err(Self::into)?;
+        let markdown = page.ok_or(StatusCode::NOT_FOUND)?;
 
         let mut context = self.build_base_context(&format!("/p/{}", slug));
-        if let Some(title) = &front_matter.title {
-            context.insert("title", title);
-        }
-        context.insert("content", &html_content);
+        insert_content(&markdown, &mut context);
+        insert_title(&markdown, &mut context);
 
         self.templates.render("page.html", &context).map_err(|e| {
             eprintln!("Template error: {}", e);
@@ -243,75 +221,25 @@ impl BlogPostHandler {
     }
 
     pub async fn render_post(&self, slug: String) -> Result<String, StatusCode> {
-        let post_path = self.find_post_by_slug(&slug)?;
-
-        // Try to read the file
-        let content = std::fs::read_to_string(post_path).map_err(|_| StatusCode::NOT_FOUND)?;
-
-        // Extract front matter and content using YAML engine
-        let matter = Matter::<YAML>::new();
-        let result = matter.parse(&content);
-
-        let front_matter = parse_front_matter(&content).unwrap_or_default();
-
-        // Parse the markdown to HTML
-        let options = Options::empty();
-        let parser = Parser::new_ext(&result.content, options);
-        let mut html_content = String::new();
-        html::push_html(&mut html_content, parser);
+        let post = self.repo.find_post_by_slug(&slug).map_err(Self::into)?;
+        let markdown = post.ok_or(StatusCode::NOT_FOUND)?;
 
         let mut context = self.build_base_context(&format!("/{}", slug));
-        if let Some(title) = &front_matter.title {
-            context.insert("title", title);
-        }
-        context.insert("content", &html_content);
-        if let Some(date_str) = &front_matter.publish_date {
-            // Try to parse the date using multiple possible formats
-            let formatted_date = format_date(date_str);
-            context.insert("date", &formatted_date);
-        }
-        //
-        // if let Some(tags) = &front_matter.tags {
-        // context.insert("tags", tags);
-        // }
+        insert_content(&markdown, &mut context);
+        insert_title(&markdown, &mut context);
+        insert_published_date(markdown, &mut context);
 
-        // Create the complete HTML with the title
         self.templates.render("post.html", &context).map_err(|e| {
             eprintln!("Template error: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })
     }
 
-    fn find_post_by_slug(&self, slug: &str) -> Result<PathBuf, StatusCode> {
-        log::info!("Requested post: {}", &slug);
-        let posts_dir = self.content_dir.join("posts");
-        for entry in std::fs::read_dir(posts_dir).map_err(|_| StatusCode::NOT_FOUND)? {
-            let entry = entry.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-            let path = entry.path();
-
-            if path.extension().map_or(false, |ext| ext == "md") {
-                let content = std::fs::read_to_string(&path)
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-                // Try to parse front matter
-                if let Some(front_matter) = parse_front_matter(&content) {
-                    // Check if front matter has a slug that matches
-                    if let Some(front_matter_slug) = &front_matter.slug {
-                        if front_matter_slug == slug {
-                            return Ok(path);
-                        }
-                    }
-                }
-
-                // If no match by front matter slug, check if the filename (without extension) matches
-                if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    if file_stem == slug {
-                        return Ok(path);
-                    }
-                }
-            }
+    fn into(repo_err: RepositoryError) -> StatusCode {
+        match repo_err {
+            blog_repository::RepositoryError::NotFound => StatusCode::NOT_FOUND,
+            blog_repository::RepositoryError::UnexpectedError => StatusCode::INTERNAL_SERVER_ERROR,
         }
-        Err(StatusCode::NOT_FOUND)
     }
 
     fn build_base_context(&self, path: &str) -> Context {
@@ -319,7 +247,6 @@ impl BlogPostHandler {
 
         let config = &self.config;
 
-        // Add common values needed by all templates
         let now = chrono::Local::now();
         context.insert("now", &now.to_rfc3339());
         context.insert("current_url", path);
@@ -330,22 +257,30 @@ impl BlogPostHandler {
     }
 }
 
-fn parse_front_matter(content: &str) -> Option<FrontMatter> {
-    // Extract the YAML front matter
-    let matter = Matter::<YAML>::new();
-    let result = matter.parse(content);
+fn insert_content(markdown: &Markdown, context: &mut Context) {
+    let html_content = parse_to_html(markdown);
+    context.insert("content", &html_content);
+}
 
-    // The matter.parse extracts the YAML as a string
-    let yaml_text = result.matter;
-
-    // Try to parse the YAML string into our FrontMatter structure
-    match serde_yaml::from_str::<FrontMatter>(yaml_text.as_str()) {
-        Ok(front_matter) => Some(front_matter),
-        Err(e) => {
-            eprintln!("Error parsing front matter: {}", e);
-            None
-        }
+fn insert_title(markdown: &Markdown, context: &mut Context) {
+    if let Some(title) = &markdown.title {
+        context.insert("title", &title);
     }
+}
+
+fn insert_published_date(markdown: Markdown, context: &mut Context) {
+    if let Some(date_str) = &markdown.publish_date {
+        let formatted_date = format_date(*date_str);
+        context.insert("date", &formatted_date);
+    }
+}
+
+fn parse_to_html(markdown: &Markdown) -> String {
+    let options = Options::empty();
+    let parser = Parser::new_ext(&markdown.content, options);
+    let mut html_content = String::new();
+    html::push_html(&mut html_content, parser);
+    html_content
 }
 
 fn parse_date_for_sorting(date_str: &str) -> Option<chrono::NaiveDate> {
@@ -377,25 +312,27 @@ fn parse_date_for_sorting(date_str: &str) -> Option<chrono::NaiveDate> {
     None
 }
 
-fn format_date(date_str: &str) -> String {
-    if let Some(date) = parse_date_for_sorting(date_str) {
-        // Format the date in a consistent, human-readable format
-        return date.format("%B %d, %Y").to_string();
-    }
-
-    date_str.to_string()
+fn format_date(date: chrono::NaiveDate) -> String {
+    date.format("%B %d, %Y").to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn format_date_str(date_str: &str) -> String {
+        if let Some(date) = parse_date_for_sorting(date_str) {
+            return format_date(date);
+        }
+        date_str.to_string()
+    }
+
     #[test]
     fn test_format_date_js_format() {
         // JavaScript date format
         let input = "Fri Dec 06 2024 12:36:53 GMT+0000 (Coordinated Universal Time)";
         let expected = "December 06, 2024";
-        assert_eq!(format_date(input), expected);
+        assert_eq!(format_date_str(input), expected);
     }
 
     #[test]
@@ -403,7 +340,7 @@ mod tests {
         // JavaScript date format without timezone name in parentheses
         let input = "Fri Dec 06 2024 12:36:53 GMT+0000";
         let expected = "December 06, 2024";
-        assert_eq!(format_date(input), expected);
+        assert_eq!(format_date_str(input), expected);
     }
 
     #[test]
@@ -411,7 +348,7 @@ mod tests {
         // Simple ISO format
         let input = "2024-12-06";
         let expected = "December 06, 2024";
-        assert_eq!(format_date(input), expected);
+        assert_eq!(format_date_str(input), expected);
     }
 
     #[test]
@@ -419,7 +356,7 @@ mod tests {
         // Invalid format should return the original string
         let input = "Invalid date";
         let expected = "Invalid date";
-        assert_eq!(format_date(input), expected);
+        assert_eq!(format_date_str(input), expected);
     }
 
     #[test]
@@ -429,7 +366,7 @@ mod tests {
 
         // With our new implementation, this format is now supported
         let expected = "December 06, 2024";
-        assert_eq!(format_date(input), expected);
+        assert_eq!(format_date_str(input), expected);
     }
 
     #[test]
@@ -442,7 +379,7 @@ mod tests {
         ];
 
         for date in test_dates {
-            let formatted = format_date(date);
+            let formatted = format_date_str(date);
             assert!(parse_date_for_sorting(&formatted).is_some());
         }
     }
