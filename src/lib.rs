@@ -84,7 +84,7 @@ struct FrontMatter {
 pub struct Markdown {
     title: Option<String>,
     content: String,
-    repo_slug: Option<String>,
+    slugs: Vec<String>,
     publish_date: Option<chrono::NaiveDate>,
 }
 
@@ -103,21 +103,28 @@ impl Markdown {
                 publish_date: front_matter
                     .publish_date
                     .and_then(|s| parse_date_for_sorting(s.as_str())),
-                repo_slug: front_matter.slug,
+                slugs: front_matter.slug.into_iter().collect(),
             },
             None => Markdown {
                 title: None,
                 content: parsed.content,
                 publish_date: None,
-                repo_slug: None,
+                slugs: vec![],
             },
         }
     }
 
-    pub fn slug(&self) -> String {
-        self.repo_slug
+    pub fn contains(&self, slug: String) -> bool {
+        self.slugs.contains(&slug)
+    }
+
+    // First frontmatter then filename.
+    pub fn primary_slug(&self) -> String {
+        self.slugs
             .clone()
+            .first()
             .expect("Markdown from repo should always contain slug") // todo: make self.title String?
+            .to_string()
     }
 
     fn parse_front_matter(content: &str) -> ParsedContent {
@@ -127,12 +134,13 @@ impl Markdown {
         let yaml_text = result.matter;
         let content = result.content;
 
-        let front_matter = serde_yaml::from_str::<FrontMatter>(yaml_text.as_str())
-            .map_err(|e| {
+        let front_matter = match serde_yaml::from_str::<FrontMatter>(yaml_text.as_str()) {
+            Ok(front_matter) => Some(front_matter),
+            Err(e) => {
                 eprintln!("Error parsing front matter: {}", e);
-                e
-            })
-            .ok();
+                None
+            }
+        };
 
         ParsedContent {
             front_matter,
@@ -194,7 +202,7 @@ impl BlogPostHandler {
             .map(|markdown| BlogPost {
                 title: markdown.title.clone().unwrap_or("Untitled".to_string()),
                 publish_date: markdown.publish_date.map(format_date),
-                slug: markdown.slug(),
+                slug: markdown.primary_slug(),
             })
             .collect();
 

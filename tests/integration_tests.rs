@@ -66,6 +66,43 @@ This is a test blog post.
 }
 
 #[tokio::test]
+async fn can_serve_single_blog_post_from_multiple_slugs_file_name_and_front_matter_slug() {
+    let post_content = r#"---
+title: Test Post
+datePublished: 2023-01-01
+slug: abc123
+---
+# Hello World
+
+This is a test blog post.
+"#;
+
+    BlogServer::with_file("posts/test-post.md", post_content)
+        .start()
+        .await
+        .get("/abc123") // front matter slug
+        .await
+        .expect()
+        .status(200)
+        .contains("<h1>Hello World</h1>")
+        .contains("This is a test blog post.")
+        .verify()
+        .await;
+
+    BlogServer::with_file("posts/test-post.md", post_content)
+        .start()
+        .await
+        .get("/test-post") // file name
+        .await
+        .expect()
+        .status(200)
+        .contains("<h1>Hello World</h1>")
+        .contains("This is a test blog post.")
+        .verify()
+        .await;
+}
+
+#[tokio::test]
 async fn can_serve_blog_post_without_front_matter() {
     let post_content_without_front_matter = r#"# Raw Markdown Post
 

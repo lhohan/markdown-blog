@@ -46,9 +46,11 @@ impl FileSystemBlogRepository {
 
             let content = read_to_string(path.clone())?;
             let mut markdown = Markdown::from_str(&content);
-            if markdown.repo_slug.is_none() {
-                markdown.repo_slug = path.file_stem().map(|s| s.to_string_lossy().into_owned())
-            }
+            markdown.slugs.push(
+                path.file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .expect("Expected file with extention"),
+            );
 
             markdowns.push(markdown);
         }
@@ -84,7 +86,7 @@ impl BlogRepository for FileSystemBlogRepository {
         let markdowns = self.all_posts_unsorted()?;
         Ok(markdowns
             .into_iter()
-            .find(|markdown| markdown.slug() == slug))
+            .find(|markdown| markdown.contains(slug.to_string())))
     }
 
     fn get_page(&self, slug: &str) -> Result<Option<Markdown>, RepositoryError> {
@@ -95,7 +97,7 @@ impl BlogRepository for FileSystemBlogRepository {
             Ok(Some(Markdown {
                 title: None,
                 content,
-                repo_slug: Some(slug.to_string()),
+                slugs: vec![slug.to_string()],
                 publish_date: None,
             }))
         } else {
