@@ -121,26 +121,22 @@ impl Markdown {
     }
 
     fn parse_front_matter(content: &str) -> ParsedContent {
-        // Extract the YAML front matter
         let matter = Matter::<YAML>::new();
         let result = matter.parse(content);
 
-        // The matter.parse extracts the YAML as a string
         let yaml_text = result.matter;
+        let content = result.content;
 
-        // Try to parse the YAML string into our FrontMatter structure
-        match serde_yaml::from_str::<FrontMatter>(yaml_text.as_str()) {
-            Ok(front_matter) => ParsedContent {
-                front_matter: Some(front_matter),
-                content: result.content,
-            },
-            Err(e) => {
+        let front_matter = serde_yaml::from_str::<FrontMatter>(yaml_text.as_str())
+            .map_err(|e| {
                 eprintln!("Error parsing front matter: {}", e);
-                ParsedContent {
-                    front_matter: None,
-                    content: result.content,
-                }
-            }
+                e
+            })
+            .ok();
+
+        ParsedContent {
+            front_matter,
+            content,
         }
     }
 }
