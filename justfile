@@ -37,3 +37,6 @@ run-clippy:
 # Clean the build artifacts
 clean:
     cargo clean
+
+bench:
+    cargo bench

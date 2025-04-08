@@ -19,5 +19,10 @@ tower-http = { version = "0.5.0", features = ["trace", "fs"] }
 
 [dev-dependencies]
 cargo-watch = "8.4.0"
+criterion = "0.5"
 reqwest = "0.11.22"
 tempfile = "3.8.1"
+
+[[bench]]
+name = "blog_benchmarks"
+harness = false
