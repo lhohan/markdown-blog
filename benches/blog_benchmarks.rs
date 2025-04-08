@@ -2,6 +2,7 @@ use blog_engine::create_app_with_content_dir;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::fs;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::sync::oneshot;
 
@@ -30,6 +31,9 @@ impl TestServer {
                 .await
                 .unwrap();
         });
+
+        // Add small delay to ensure server is ready
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         TestServer {
             addr: server_addr,
@@ -70,10 +74,10 @@ This is test content for post {i}."#,
 fn benchmark_blog(c: &mut Criterion) {
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
-    let server = runtime.block_on(async {
+    let server = Arc::new(runtime.block_on(async {
         let temp_dir = setup_test_environment(10_000);
         TestServer::new(temp_dir).await
-    });
+    }));
 
     let mut group = c.benchmark_group("blog_operations");
 
@@ -83,20 +87,6 @@ fn benchmark_blog(c: &mut Criterion) {
             runtime.block_on(async {
                 let client = reqwest::Client::new();
                 client.get(server.url("/")).send().await.unwrap();
-            });
-        })
-    });
-
-    // Benchmark single post access
-    group.bench_function("get_single_post_from_10k", |b| {
-        b.iter(|| {
-            runtime.block_on(async {
-                let client = reqwest::Client::new();
-                client
-                    .get(server.url("/test-post-5000"))
-                    .send()
-                    .await
-                    .unwrap();
             });
         })
     });
