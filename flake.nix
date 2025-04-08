@@ -1,20 +1,27 @@
 {
-  description = "Nix flake for Rust project with just support";
+  description = "Nix flake for Rust project with Just support";
+  #inputs.nixpkgs.url = "github:nixos/nixpkgs";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+  inputs.flake-utils.url = "github:numtide/flake-utils";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/master";
-    flake-utils.url = "github:numtide/flake-utils";
-  };
-
-  outputs = { self, nixpkgs, flake-utils }: flake-utils.lib.eachDefaultSystem (system: let
-    pkgs = nixpkgs.legacyPackages.${system};
-  in {
-    devShell = pkgs.mkShell {
-      buildInputs = with pkgs; [
-        jujutsu
-        rustup
-        just
-      ];
-    };
-  });
+  outputs = { nixpkgs, flake-utils, ... }:
+    flake-utils.lib.eachSystem [
+         "aarch64-darwin"
+         "aarch64-linux"
+         "x86_64-linux"
+         "x86_64-darwin"
+       ] (system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+      in
+      {
+        devShells.default = pkgs.mkShell {
+          packages = [
+            pkgs.gh
+            pkgs.jujutsu
+            pkgs.just
+            pkgs.rustup
+          ];
+        };
+      });
 }
