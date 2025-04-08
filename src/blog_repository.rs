@@ -8,6 +8,7 @@ pub trait BlogRepository {
     fn get_page(&self, slug: &str) -> Result<Option<Markdown>, RepositoryError>;
 }
 
+#[derive(Debug)]
 pub enum RepositoryError {
     NotFound,
     UnexpectedError,

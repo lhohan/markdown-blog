@@ -1,6 +1,8 @@
 mod blog_repository;
+mod cache;
 mod config;
 use blog_repository::{BlogRepository, FileSystemBlogRepository, RepositoryError};
+use cache::CachedBlogRepository;
 pub use config::BlogConfig;
 
 use axum::{
@@ -30,7 +32,7 @@ pub fn create_app_with_content_dir<P: Into<PathBuf> + Clone>(content_dir: P) -> 
 }
 
 fn create_app<P: Into<PathBuf> + Clone>(content_dir: P, config: BlogConfig) -> Router {
-    let repo = FileSystemBlogRepository::new(content_dir.clone().into());
+    let repo = create_repo(content_dir);
     let blog_handler = Arc::new(BlogPostHandler::new(config, repo));
 
     let static_service = get_service(ServeDir::new("static")).handle_error(|error| async move {
@@ -47,6 +49,18 @@ fn create_app<P: Into<PathBuf> + Clone>(content_dir: P, config: BlogConfig) -> R
         .route("/:slug", get(post_handler))
         .nest_service("/static", static_service)
         .layer(axum::extract::Extension(blog_handler))
+}
+
+fn create_repo<P: Into<PathBuf> + Clone>(
+    content_dir: P,
+) -> CachedBlogRepository<FileSystemBlogRepository> {
+    let file_system_repo = FileSystemBlogRepository::new(content_dir.clone().into());
+    let mut cached_repo = CachedBlogRepository::new(file_system_repo);
+    if let Err(e) = cached_repo.refresh() {
+        log::error!("Failed to populate initial cache: {:?}", e);
+    }
+    let repo = cached_repo;
+    repo
 }
 
 async fn index_handler(
@@ -81,6 +95,7 @@ struct FrontMatter {
     slug: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct Markdown {
     title: Option<String>,
     content: String,
