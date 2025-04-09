@@ -22,13 +22,34 @@ use tera::{Context, Tera};
 use tower_http::services::ServeDir;
 
 pub fn create_app_with_defaults() -> Router {
-    create_app_with_content_dir(".")
+    create_app_with_content_dir("assets")
 }
 
+use std::fs;
 pub fn create_app_with_content_dir<P: Into<PathBuf> + Clone>(content_dir: P) -> Router {
+    let path: PathBuf = content_dir.clone().into();
+    if let Err(e) = print_dir_contents(&path) {
+        eprintln!("Error: {}", e);
+    }
     let config_path = content_dir.clone().into().join("blog_config.yaml");
     let config = BlogConfig::from_file_or_default(config_path);
     create_app(content_dir, config)
+}
+
+fn print_dir_contents(path: &std::path::Path) -> std::io::Result<()> {
+    if path.is_dir() {
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                print_dir_contents(&path)?;
+            } else {
+                println!("{}", path.display());
+            }
+        }
+    }
+    Ok(())
 }
 
 fn create_app<P: Into<PathBuf> + Clone>(content_dir: P, config: BlogConfig) -> Router {
@@ -48,6 +69,7 @@ fn create_app<P: Into<PathBuf> + Clone>(content_dir: P, config: BlogConfig) -> R
         .route("/p/{slug}", get(page_handler))
         .route("/{slug}", get(post_handler))
         .nest_service("/static", static_service)
+        .fallback_service(ServeDir::new("assets"))
         .layer(axum::extract::Extension(blog_handler))
 }
 
@@ -180,8 +202,55 @@ pub struct BlogPostHandler {
 
 impl BlogPostHandler {
     pub fn new(config: BlogConfig, blog_repo: impl BlogRepository + Send + Sync + 'static) -> Self {
-        let templates = match Tera::new("templates/**/*.html") {
-            Ok(t) => t,
+        let cwd = std::env::current_dir().unwrap();
+        println!("Working directory: {}", cwd.display());
+
+        // 2. List ALL files and directories recursively
+        fn list_dir_recursive(dir: &std::path::Path, prefix: &str) {
+            println!("{}DIR: {}", prefix, dir.display());
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        list_dir_recursive(&path, &format!("{}  ", prefix));
+                    } else {
+                        println!("{}FILE: {}", prefix, path.display());
+                    }
+                }
+            } else {
+                println!("{}ERROR: Could not read directory", prefix);
+            }
+        }
+        list_dir_recursive(&cwd, "");
+
+        println!("\nDirect template file access tests:");
+        let test_paths = vec![
+            "/templates/index.html",
+            "templates/index.html",
+            "/assets/templates/index.html",
+            "assets/templates/index.html",
+            "/app/templates/index.html",
+            "/app/assets/templates/index.html",
+        ];
+
+        for path in test_paths {
+            match std::fs::read_to_string(path) {
+                Ok(content) => {
+                    println!("✅ Successfully read '{}' ({} bytes)", path, content.len())
+                }
+                Err(e) => println!("❌ Failed to read '{}': {}", path, e),
+            }
+        }
+        let template_path = "templates/**/*.html";
+        println!("Template path {}", template_path);
+        let templates = match Tera::new(&template_path) {
+            Ok(t) => {
+                println!("Successfully loaded templates:");
+                for name in t.get_template_names() {
+                    println!("  - {}", name);
+                }
+                t
+            }
             Err(e) => {
                 eprintln!("Template parsing error(s): {}", e);
                 Tera::default()

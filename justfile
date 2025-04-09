@@ -1,3 +1,5 @@
+assets_dir := "./assets"
+
 build:
     cargo build --release --bin tt
 
@@ -21,6 +23,26 @@ test:
 # Run tests on change continuously
 test-w:
     cargo watch -c -x test
+
+assets_pages_dir := assets_dir + "/pages"
+assets_posts_dir := assets_dir + "/posts"
+
+collect-deploy-assets:
+    rm -rf {{assets_dir}}
+
+    mkdir -p {{assets_posts_dir}}
+    cp -r posts/*.md {{assets_posts_dir}}
+
+    mkdir -p {{assets_pages_dir}}
+    cp -r pages/*.md {{assets_pages_dir}}
+
+    cp -r static {{assets_dir}}
+    cp -r templates {{assets_dir}}
+    cp blog_config.yaml {{assets_dir}}
+
+deploy: collect-deploy-assets
+    shuttle deploy --debug
+
 
 # Run tests with coverage
 # test-coverage:
