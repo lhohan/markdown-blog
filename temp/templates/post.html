@@ -1,0 +1,24 @@
+{% extends "base.html" %} {% block title %} {% if title %}{{ title }} | {% endif
+%}{{ site_title }} {% endblock %} {% block content %}
+<article class="post">
+    <header class="post-header">
+        {% if title %}
+        <h1 class="post-title">{{ title }}</h1>
+        {% endif %}
+        <div class="post-meta">
+            {% if date %}Published on {{date}} {% endif %} {% if author %} by {{
+            author }} {% endif %}
+        </div>
+    </header>
+
+    <div class="post-content">{{ content | safe }}</div>
+
+    {% if tags and tags | length > 0 %}
+    <div class="post-tags">
+        {% for tag in tags %}
+        <a href="/tags/{{ tag }}" class="post-tag">{{ tag }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</article>
+{% endblock %}

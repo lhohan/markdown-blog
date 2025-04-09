@@ -223,6 +223,7 @@ impl BlogPostHandler {
         }
         list_dir_recursive(&cwd, "");
 
+        let pwd = std::env::current_dir().unwrap();
         println!("\nDirect template file access tests:");
         let test_paths = vec![
             "/templates/index.html",
@@ -241,8 +242,13 @@ impl BlogPostHandler {
                 Err(e) => println!("❌ Failed to read '{}': {}", path, e),
             }
         }
-        let template_path = "templates/**/*.html";
-        println!("Template path {}", template_path);
+        let template_path = pwd
+            .join("assets")
+            .join("templates")
+            .join("**/*.html")
+            .to_string_lossy()
+            .to_string();
+        println!("Template path {template_path}");
         let templates = match Tera::new(&template_path) {
             Ok(t) => {
                 println!("Successfully loaded templates:");

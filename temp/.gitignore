@@ -1,0 +1,9 @@
+/target
+
+# Ignore content testing directories
+/*posts
+/*pages
+/*docs
+/blog_config.yaml
+.shuttle*
+Secrets*.toml
