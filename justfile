@@ -9,11 +9,11 @@ check-w:
 
 # Run the server
 run:
-    cargo run -- --help
+    shuttle run
 
 # Run the server with restart on changes
 run-w:
-    cargo watch -w src -w templates -w static -c -x 'test -- --nocapture' -x run
+    cargo watch -w src -w templates -w static -c -x 'test -- --nocapture' -x 'shuttle run'
 
 test:
     cargo test

@@ -21,6 +21,7 @@
             pkgs.jujutsu
             pkgs.just
             pkgs.rustup
+            pkgs.cargo-shuttle
           ];
         };
       });

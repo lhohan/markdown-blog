@@ -1,19 +1,13 @@
-use std::net::SocketAddr;
-
-#[tokio::main]
-async fn main() {
+#[shuttle_runtime::main]
+async fn main() -> shuttle_axum::ShuttleAxum {
     simple_logger::SimpleLogger::new()
         .with_level(log::LevelFilter::Info)
         .with_utc_timestamps()
         .with_colors(true)
         .init()
-        .unwrap();
+        // in Shuttle environment logger is preconfigured
+        .unwrap_or_else(|e| println!("Error configuring logger: {e}"));
 
     let app = blog_engine::create_app_with_defaults();
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-
-    log::info!("Server starting on {}", addr);
-
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    Ok(app.into())
 }

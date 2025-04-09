@@ -1,5 +1,6 @@
 use blog_engine::create_app_with_content_dir;
 use criterion::{criterion_group, criterion_main, Criterion};
+use shuttle_axum::axum::serve;
 use std::fs;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -26,7 +27,7 @@ impl TestServer {
         };
 
         tokio::spawn(async move {
-            axum::serve(listener, app)
+            serve(listener, app)
                 .with_graceful_shutdown(shutdown_future)
                 .await
                 .unwrap();

@@ -5,17 +5,17 @@ use blog_repository::{BlogRepository, FileSystemBlogRepository, RepositoryError}
 use cache::CachedBlogRepository;
 pub use config::BlogConfig;
 
-use axum::{
-    extract::Path,
-    http::StatusCode,
-    response::Html,
-    routing::{get, get_service},
-    Router,
-};
 use gray_matter::engine::YAML;
 use gray_matter::Matter;
 use pulldown_cmark::{html, Options, Parser};
 use serde::Deserialize;
+use shuttle_axum::axum::{
+    extract::Path,
+    http::StatusCode,
+    response::Html,
+    routing::{get, get_service},
+    Extension, Router,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tera::{Context, Tera};
@@ -45,8 +45,8 @@ fn create_app<P: Into<PathBuf> + Clone>(content_dir: P, config: BlogConfig) -> R
     Router::new()
         .route("/health", get(|| async { "I'm ok!" }))
         .route("/", get(index_handler))
-        .route("/p/:slug", get(page_handler))
-        .route("/:slug", get(post_handler))
+        .route("/p/{slug}", get(page_handler))
+        .route("/{slug}", get(post_handler))
         .nest_service("/static", static_service)
         .layer(axum::extract::Extension(blog_handler))
 }
@@ -64,7 +64,7 @@ fn create_repo<P: Into<PathBuf> + Clone>(
 }
 
 async fn index_handler(
-    blog_handler: axum::extract::Extension<Arc<BlogPostHandler>>,
+    blog_handler: Extension<Arc<BlogPostHandler>>,
 ) -> Result<Html<String>, StatusCode> {
     let html = blog_handler.list_posts().await?;
     Ok(Html(html))
@@ -72,7 +72,7 @@ async fn index_handler(
 
 async fn page_handler(
     Path(slug): Path<String>,
-    blog_handler: axum::extract::Extension<Arc<BlogPostHandler>>,
+    blog_handler: Extension<Arc<BlogPostHandler>>,
 ) -> Result<Html<String>, StatusCode> {
     let html = blog_handler.render_page(slug).await?;
     Ok(Html(html))
@@ -80,7 +80,7 @@ async fn page_handler(
 
 async fn post_handler(
     Path(slug): Path<String>,
-    blog_handler: axum::extract::Extension<Arc<BlogPostHandler>>,
+    blog_handler: Extension<Arc<BlogPostHandler>>,
 ) -> Result<Html<String>, StatusCode> {
     let html = blog_handler.render_post(slug).await?;
     Ok(Html(html))

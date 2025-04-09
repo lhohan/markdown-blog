@@ -334,6 +334,8 @@ It should still be displayed properly."#;
 
 mod specification_support {
     use blog_engine::create_app_with_content_dir;
+    use shuttle_axum::axum::serve;
+    use shuttle_axum::axum::Router;
     use std::fs;
     use std::net::SocketAddr;
     use tempfile::TempDir;
@@ -454,7 +456,7 @@ mod specification_support {
     }
 
     async fn start_test_server(
-        app: axum::Router,
+        app: Router,
     ) -> (
         SocketAddr,
         tokio::sync::oneshot::Sender<()>,
@@ -471,7 +473,7 @@ mod specification_support {
         };
 
         let server_handle = tokio::spawn(async move {
-            axum::serve(listener, app)
+            serve(listener, app)
                 .with_graceful_shutdown(shutdown_future)
                 .await
                 .unwrap();

@@ -5,3 +5,5 @@
 /*pages
 /*docs
 /blog_config.yaml
+.shuttle*
+Secrets*.toml
