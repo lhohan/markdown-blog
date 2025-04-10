@@ -1,4 +1,9 @@
 /target
+/temp
+deployment.zip
+
+# Directory to assemble all content and blog assets.
+/content
 
 # Ignore content testing directories
 /*posts

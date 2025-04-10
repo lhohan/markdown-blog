@@ -1,8 +1,9 @@
-use blog_engine::create_app_with_content_dir;
+use blog_engine::create_app_with_dirs;
 use criterion::{criterion_group, criterion_main, Criterion};
 use shuttle_axum::axum::serve;
 use std::fs;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::sync::oneshot;
@@ -15,7 +16,8 @@ struct TestServer {
 
 impl TestServer {
     async fn new(content_dir: TempDir) -> Self {
-        let app = create_app_with_content_dir(content_dir.path());
+        let content_dir_buf: PathBuf = content_dir.path().into();
+        let app = create_app_with_dirs(content_dir_buf, ".".into());
         let addr = SocketAddr::from(([127, 0, 0, 1], 0));
         let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
         let server_addr = listener.local_addr().unwrap();

@@ -1,4 +1,4 @@
-assets_dir := "./assets"
+content_dir := "./content"
 
 build:
     cargo build --release --bin tt
@@ -10,11 +10,11 @@ check-w:
     cargo watch -c -x check
 
 # Run the server
-run:
+run: collect-deploy-assets
     shuttle run
 
 # Run the server with restart on changes
-run-w:
+run-w: collect-deploy-assets
     cargo watch -w src -w templates -w static -c -x 'test -- --nocapture' -x 'shuttle run'
 
 test:
@@ -24,24 +24,24 @@ test:
 test-w:
     cargo watch -c -x test
 
-assets_pages_dir := assets_dir + "/pages"
-assets_posts_dir := assets_dir + "/posts"
+content_pages_dir := content_dir + "/pages"
+content_posts_dir := content_dir + "/posts"
 
 collect-deploy-assets:
-    rm -rf {{assets_dir}}
+    rm -rf {{content_dir}}
 
-    mkdir -p {{assets_posts_dir}}
-    cp -r posts/*.md {{assets_posts_dir}}
+    mkdir -p {{content_posts_dir}}
+    cp -r posts/*.md {{content_posts_dir}}
 
-    mkdir -p {{assets_pages_dir}}
-    cp -r pages/*.md {{assets_pages_dir}}
+    mkdir -p {{content_pages_dir}}
+    cp -r pages/*.md {{content_pages_dir}}
 
-    cp -r static {{assets_dir}}
-    cp -r templates {{assets_dir}}
-    cp blog_config.yaml {{assets_dir}}
+    cp -r static {{content_dir}}
+    cp -r templates {{content_dir}}
+    cp blog_config.yaml {{content_dir}}
 
-deploy: collect-deploy-assets
-    shuttle deploy --debug
+deploy: test collect-deploy-assets
+    shuttle deploy
 
 
 # Run tests with coverage

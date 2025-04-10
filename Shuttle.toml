@@ -1,5 +1,6 @@
 [deploy]
-assets = ["assets/*", "assets", "templates/*", "templates"]
+include = ["content/*"]
+assets = ["content/*"]
 
 [build]
-assets = ["assets/*", "assets", "templates/*", "templates"]
+assets = ["content/*"]

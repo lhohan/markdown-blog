@@ -1,0 +1,6 @@
+.envrc
+flake.*
+.ignore
+justfile
+.github/
+prompts/

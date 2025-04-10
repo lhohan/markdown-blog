@@ -333,7 +333,9 @@ It should still be displayed properly."#;
 }
 
 mod specification_support {
-    use blog_engine::create_app_with_content_dir;
+    use blog_engine::create_app_with_dirs;
+    use blog_engine::BlogDir;
+    use blog_engine::ContentDir;
     use shuttle_axum::axum::serve;
     use shuttle_axum::axum::Router;
     use std::fs;
@@ -398,12 +400,13 @@ mod specification_support {
                 fs::write(&file, &file_on_server.content).unwrap();
             }
 
+            let blog_dir = BlogDir(".".into());
+            let content_dir = ContentDir(temp_path.clone());
             if let Some(config_content) = self.config {
-                let config_file = temp_path.join("blog_config.yaml");
-                fs::write(&config_file, &config_content).unwrap();
+                fs::write(&content_dir.config_file(), &config_content).unwrap();
             }
 
-            let app = create_app_with_content_dir(&temp_path);
+            let app = create_app_with_dirs(temp_path, blog_dir.dir());
             let (server_addr, shutdown_tx, server_handle) = start_test_server(app).await;
 
             // Keep temp_dir in the RunningServer so it lives as long as the server
