@@ -31,7 +31,6 @@ impl BlogConfig {
                     ),
                 )
             })?;
-            dbg!(&config);
             Ok(config)
         } else {
             Err(std::io::Error::new(
@@ -42,7 +41,6 @@ impl BlogConfig {
     }
 
     pub fn from_file_or_default<P: AsRef<Path> + std::fmt::Debug + Clone>(path: P) -> Self {
-        dbg!(&path);
         match Self::from_file(path) {
             Ok(config) => config,
             Err(e) => {

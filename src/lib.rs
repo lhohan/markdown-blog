@@ -64,8 +64,6 @@ fn create_app(content_dir: ContentDir, blog_dir: &BlogDir, config: BlogConfig) -
     let blog_handler = Arc::new(BlogPostHandler::new(config, repo, blog_dir));
 
     let statics = blog_dir.static_dir();
-    dbg!(&statics);
-    println!("static path {}", statics.display());
     let static_service = get_service(ServeDir::new(statics)).handle_error(|error| async move {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -215,27 +213,6 @@ impl BlogPostHandler {
         blog_repo: impl BlogRepository + Send + Sync + 'static,
         blog_dir: &BlogDir,
     ) -> Self {
-        let cwd = std::env::current_dir().unwrap();
-        println!("Working directory: {}", cwd.display());
-
-        println!("\nDirect template file access tests:");
-        let test_paths = vec![
-            "/templates/index.html",
-            "templates/index.html",
-            "/content/templates/index.html",
-            "content/templates/index.html",
-            "/app/templates/index.html",
-            "/app/content/templates/index.html",
-        ];
-
-        for path in test_paths {
-            match std::fs::read_to_string(path) {
-                Ok(content) => {
-                    println!("✅ Successfully read '{}' ({} bytes)", path, content.len())
-                }
-                Err(e) => println!("❌ Failed to read '{}': {}", path, e),
-            }
-        }
         let template_path = format!("{}{}", blog_dir.templates_dir().display(), "/**/*.html");
         let templates = match Tera::new(&template_path) {
             Ok(t) => t,
