@@ -2,7 +2,7 @@ mod blog_repository;
 mod cache;
 mod config;
 use blog_repository::{BlogRepository, FileSystemBlogRepository, RepositoryError};
-use cache::CachedBlogRepository;
+use cache::Cached;
 pub use config::BlogConfig;
 
 use gray_matter::engine::YAML;
@@ -82,14 +82,13 @@ fn create_app(content_dir: ContentDir, blog_dir: &BlogDir, config: BlogConfig) -
 
 fn create_repo<P: Into<PathBuf> + Clone>(
     content_dir: P,
-) -> CachedBlogRepository<FileSystemBlogRepository> {
+) -> Cached<FileSystemBlogRepository, Markdown> {
     let file_system_repo = FileSystemBlogRepository::new(content_dir.clone().into());
-    let mut cached_repo = CachedBlogRepository::new(file_system_repo);
+    let mut cached_repo = Cached::new(file_system_repo);
     if let Err(e) = cached_repo.refresh() {
         log::error!("Failed to populate initial cache: {:?}", e);
     }
-    let repo = cached_repo;
-    repo
+    cached_repo
 }
 
 async fn index_handler(
