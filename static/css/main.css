@@ -153,6 +153,28 @@ img {
     margin-bottom: 1rem;
 }
 
+.posts ul {
+    list-style: none;
+    padding: 0;
+}
+
+.post-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.post-date {
+    color: var(--muted-color);
+    font-size: 0.85rem;
+    margin-left: 1rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 6rem;
+    text-align: right;
+    font-weight: 300;
+}
+
 .post {
     margin-bottom: 0.5rem;
     border-bottom: none;

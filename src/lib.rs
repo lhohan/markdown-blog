@@ -250,7 +250,7 @@ impl BlogPostHandler {
             .into_iter()
             .map(|markdown| BlogPost {
                 title: markdown.title.clone().unwrap_or("Untitled".to_string()),
-                publish_date: markdown.publish_date.map(format_date),
+                publish_date: markdown.publish_date.map(format_date_for_posts_overview),
                 slug: markdown.primary_slug(),
             })
             .collect();
@@ -323,7 +323,7 @@ fn insert_title(markdown: &Markdown, context: &mut Context) {
 
 fn insert_published_date(markdown: Markdown, context: &mut Context) {
     if let Some(date_str) = &markdown.publish_date {
-        let formatted_date = format_date(*date_str);
+        let formatted_date = format_date_for_post_view(*date_str);
         context.insert("date", &formatted_date);
     }
 }
@@ -365,8 +365,12 @@ fn parse_date_for_sorting(date_str: &str) -> Option<chrono::NaiveDate> {
     None
 }
 
-fn format_date(date: chrono::NaiveDate) -> String {
+fn format_date_for_post_view(date: chrono::NaiveDate) -> String {
     date.format("%B %d, %Y").to_string()
+}
+
+fn format_date_for_posts_overview(date: chrono::NaiveDate) -> String {
+    date.format("%Y-%m-%d").to_string()
 }
 
 #[cfg(test)]
@@ -375,7 +379,7 @@ mod tests {
 
     fn format_date_str(date_str: &str) -> String {
         if let Some(date) = parse_date_for_sorting(date_str) {
-            return format_date(date);
+            return format_date_for_post_view(date);
         }
         date_str.to_string()
     }
