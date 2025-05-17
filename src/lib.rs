@@ -85,7 +85,7 @@ fn create_repo<P: Into<PathBuf> + Clone>(
 ) -> Cached<FileSystemBlogRepository, Markdown> {
     let file_system_repo = FileSystemBlogRepository::new(content_dir.clone().into());
     let mut cached_repo = Cached::new(file_system_repo);
-    if let Err(e) = cached_repo.refresh() {
+    if let Err(e) = cached_repo.preload_all() {
         log::error!("Failed to populate initial cache: {:?}", e);
     }
     cached_repo

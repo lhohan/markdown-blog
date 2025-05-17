@@ -36,7 +36,7 @@ impl<R: BlogRepository> Cached<R, Markdown> {
         }
     }
 
-    pub fn refresh(&mut self) -> Result<(), RepositoryError> {
+    pub fn preload_all(&mut self) -> Result<(), RepositoryError> {
         let posts = self.inner.get_all_posts()?;
         let mut slug_map = HashMap::new();
 
