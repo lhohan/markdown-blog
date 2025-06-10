@@ -95,7 +95,7 @@ async fn index_handler(
     blog_handler: Extension<Arc<BlogPostHandler>>,
 ) -> Result<Html<String>, StatusCode> {
     let html = blog_handler.list_posts().await?;
-    Ok(Html(html))
+    Ok(html)
 }
 
 async fn page_handler(
@@ -103,7 +103,7 @@ async fn page_handler(
     blog_handler: Extension<Arc<BlogPostHandler>>,
 ) -> Result<Html<String>, StatusCode> {
     let html = blog_handler.render_page(slug).await?;
-    Ok(Html(html))
+    Ok(html)
 }
 
 async fn post_handler(
@@ -111,7 +111,7 @@ async fn post_handler(
     blog_handler: Extension<Arc<BlogPostHandler>>,
 ) -> Result<Html<String>, StatusCode> {
     let html = blog_handler.render_post(slug).await?;
-    Ok(Html(html))
+    Ok(html)
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -230,16 +230,19 @@ impl BlogPostHandler {
         }
     }
 
-    pub async fn list_posts(&self) -> Result<String, StatusCode> {
+    pub async fn list_posts(&self) -> Result<Html<String>, StatusCode> {
         let posts = self.get_all_posts()?;
 
         let mut context = self.build_base_context("/");
         context.insert("posts", &posts);
 
-        self.templates.render("index.html", &context).map_err(|e| {
-            eprintln!("Template error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })
+        self.templates
+            .render("index.html", &context)
+            .map_err(|e| {
+                eprintln!("Template error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })
+            .map(Html)
     }
 
     fn get_all_posts(&self) -> Result<Vec<BlogPost>, StatusCode> {
@@ -257,7 +260,7 @@ impl BlogPostHandler {
         Ok(posts)
     }
 
-    pub async fn render_page(&self, slug: String) -> Result<String, StatusCode> {
+    pub async fn render_page(&self, slug: String) -> Result<Html<String>, StatusCode> {
         log::info!("Requested page: {}", &slug);
         let page = self.repo.get_page(&slug).map_err(Self::into)?;
         let markdown = page.ok_or(StatusCode::NOT_FOUND)?;
@@ -266,13 +269,16 @@ impl BlogPostHandler {
         insert_content(&markdown, &mut context);
         insert_title(&markdown, &mut context);
 
-        self.templates.render("page.html", &context).map_err(|e| {
-            eprintln!("Template error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })
+        self.templates
+            .render("page.html", &context)
+            .map_err(|e| {
+                eprintln!("Template error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })
+            .map(Html)
     }
 
-    pub async fn render_post(&self, slug: String) -> Result<String, StatusCode> {
+    pub async fn render_post(&self, slug: String) -> Result<Html<String>, StatusCode> {
         let post = self.repo.find_post_by_slug(&slug).map_err(Self::into)?;
         let markdown = post.ok_or(StatusCode::NOT_FOUND)?;
 
@@ -281,10 +287,13 @@ impl BlogPostHandler {
         insert_title(&markdown, &mut context);
         insert_published_date(markdown, &mut context);
 
-        self.templates.render("post.html", &context).map_err(|e| {
-            eprintln!("Template error: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })
+        self.templates
+            .render("post.html", &context)
+            .map_err(|e| {
+                eprintln!("Template error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })
+            .map(Html)
     }
 
     fn into(repo_err: RepositoryError) -> StatusCode {
