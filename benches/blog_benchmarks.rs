@@ -59,6 +59,7 @@ fn setup_test_environment(num_posts: usize) -> TempDir {
         let content = format!(
             r#"---
 title: Test Post {i}
+slug: post-{i}
 datePublished: 2024-01-{:02}
 ---
 # Post {i}
@@ -70,6 +71,25 @@ This is test content for post {i}."#,
         let file_path = posts_dir.join(format!("test-post-{i}.md"));
         fs::write(file_path, content).unwrap();
     }
+
+    // Create a large post for rendering benchmarks
+    let large_post_content = format!(
+            r#"---
+    title: Large Test Post
+    slug: large-post
+    datePublished: 2024-01-01
+    ---
+    # Large Post
+
+    {}"#,
+            // Create a large post with repeated paragraphs
+            (0..1000)
+                .map(|i| format!("This is paragraph {} with some content that needs to be rendered. It includes **bold text** and *italic text* and [links](http://example.com) to test markdown rendering.\n\n", i))
+                .collect::<String>()
+        );
+
+    let large_file_path = posts_dir.join("large-post.md");
+    fs::write(large_file_path, large_post_content).unwrap();
 
     temp_dir
 }
@@ -90,6 +110,24 @@ fn benchmark_blog(c: &mut Criterion) {
             runtime.block_on(async {
                 let client = reqwest::Client::new();
                 client.get(server.url("/")).send().await.unwrap();
+            });
+        })
+    });
+
+    // Benchmark rendering a large post
+    group.bench_function("render_large_post", |b| {
+        b.iter(|| {
+            runtime.block_on(async {
+                let client = reqwest::Client::new();
+                let response = client
+                    .get(server.url("/large-post"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .text()
+                    .await
+                    .unwrap();
+                assert!(response.contains("Large Test Post")); // Basic validation
             });
         })
     });
