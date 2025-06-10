@@ -98,3 +98,11 @@ When you're ready to continue building, this minimal foundation makes it easy to
 ## Task 004 Add paging support
 
 ## Task 005 Performance: stop reading all files on each request
+
+## Task 006: Cache HTML instead of rendering each time
+
+## Task 007: Simplify Cache setup?
+
+## Task 008: Minimize Shuttle dependencies
+
+- Be able to run locally without Shuttle?
