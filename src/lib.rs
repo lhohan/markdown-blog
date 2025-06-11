@@ -5,6 +5,7 @@ use blog_repository::{BlogRepository, FileSystemBlogRepository, RepositoryError}
 use cache::Cached;
 pub use config::BlogConfig;
 
+use async_trait::async_trait;
 use gray_matter::engine::YAML;
 use gray_matter::Matter;
 use pulldown_cmark::{html, Options, Parser};
@@ -20,6 +21,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tera::{Context, Tera};
 use tower_http::services::ServeDir;
+
+use crate::cache::CachedRenderer;
 
 pub fn create_app_with_defaults() -> Router {
     create_app_with_dirs("content", "content")
@@ -61,7 +64,10 @@ pub fn create_app_with_dirs<P: Into<PathBuf> + Clone>(content_dir: P, blog_dir: 
 
 fn create_app(content_dir: ContentDir, blog_dir: &BlogDir, config: BlogConfig) -> Router {
     let repo = create_repo(content_dir.dir());
-    let blog_handler = Arc::new(BlogPostHandler::new(config, repo, blog_dir));
+    let blog_handler = BlogPostHandler::new(config, repo, blog_dir);
+
+    let cached_renderer = CachedRenderer::new(Arc::new(blog_handler));
+    let shared_renderer: Arc<dyn Renderer + Send + Sync> = Arc::new(cached_renderer);
 
     let statics = blog_dir.static_dir();
     let static_service = get_service(ServeDir::new(statics)).handle_error(|error| async move {
@@ -71,18 +77,18 @@ fn create_app(content_dir: ContentDir, blog_dir: &BlogDir, config: BlogConfig) -
         )
     });
 
+    dbg!("Creating router!");
+
     Router::new()
         .route("/health", get(|| async { "I'm ok!" }))
         .route("/", get(index_handler))
         .route("/p/{slug}", get(page_handler))
         .route("/{slug}", get(post_handler))
         .nest_service("/static", static_service)
-        .layer(axum::extract::Extension(blog_handler))
+        .layer(axum::extract::Extension(shared_renderer))
 }
 
-fn create_repo<P: Into<PathBuf> + Clone>(
-    content_dir: P,
-) -> Cached<FileSystemBlogRepository, Markdown> {
+fn create_repo<P: Into<PathBuf> + Clone>(content_dir: P) -> Cached<FileSystemBlogRepository> {
     let file_system_repo = FileSystemBlogRepository::new(content_dir.clone().into());
     let mut cached_repo = Cached::new(file_system_repo);
     if let Err(e) = cached_repo.preload_all() {
@@ -92,25 +98,24 @@ fn create_repo<P: Into<PathBuf> + Clone>(
 }
 
 async fn index_handler(
-    blog_handler: Extension<Arc<BlogPostHandler>>,
+    blog_handler: Extension<Arc<dyn Renderer + Send + Sync>>,
 ) -> Result<Html<String>, StatusCode> {
-    let html = blog_handler.list_posts().await?;
-    Ok(html)
+    blog_handler.0.posts().await
 }
 
 async fn page_handler(
     Path(slug): Path<String>,
-    blog_handler: Extension<Arc<BlogPostHandler>>,
+    blog_handler: Extension<Arc<dyn Renderer + Send + Sync>>,
 ) -> Result<Html<String>, StatusCode> {
-    let html = blog_handler.render_page(slug).await?;
+    let html = blog_handler.page_for(slug).await?;
     Ok(html)
 }
 
 async fn post_handler(
     Path(slug): Path<String>,
-    blog_handler: Extension<Arc<BlogPostHandler>>,
+    blog_handler: Extension<Arc<dyn Renderer + Send + Sync>>,
 ) -> Result<Html<String>, StatusCode> {
-    let html = blog_handler.render_post(slug).await?;
+    let html = blog_handler.post_for(slug).await?;
     Ok(html)
 }
 
@@ -192,14 +197,23 @@ impl Markdown {
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 struct BlogPost {
     title: String,
     publish_date: Option<String>,
     slug: String,
 }
 
+#[async_trait]
+trait Renderer {
+    async fn post_for(&self, slug: String) -> Result<Html<String>, StatusCode>;
+    async fn page_for(&self, slug: String) -> Result<Html<String>, StatusCode>;
+    async fn posts(&self) -> Result<Html<String>, StatusCode>;
+}
+
 type ThreadSafeBlogRepository = Arc<dyn BlogRepository + Send + Sync>;
+
+#[derive(Clone)]
 pub struct BlogPostHandler {
     repo: ThreadSafeBlogRepository,
     templates: Tera,
@@ -230,7 +244,7 @@ impl BlogPostHandler {
         }
     }
 
-    pub async fn list_posts(&self) -> Result<Html<String>, StatusCode> {
+    pub async fn render_posts(&self) -> Result<Html<String>, StatusCode> {
         let posts = self.get_all_posts()?;
 
         let mut context = self.build_base_context("/");
@@ -315,6 +329,21 @@ impl BlogPostHandler {
         context.insert("site_description", &config.site_description);
 
         context
+    }
+}
+
+#[async_trait]
+impl Renderer for BlogPostHandler {
+    async fn posts(&self) -> Result<Html<String>, StatusCode> {
+        BlogPostHandler::render_posts(self).await
+    }
+
+    async fn post_for(&self, slug: String) -> Result<Html<String>, StatusCode> {
+        BlogPostHandler::render_post(self, slug).await
+    }
+
+    async fn page_for(&self, slug: String) -> Result<Html<String>, StatusCode> {
+        BlogPostHandler::render_page(self, slug).await
     }
 }
 
