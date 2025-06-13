@@ -5,6 +5,7 @@ mod model;
 mod renderer;
 use blog_repository::FileSystemBlogRepository;
 pub use config::BlogConfig;
+pub use directories::{BlogDir, ContentDir};
 use model::Markdown;
 use renderer::{BlogPostHandler, Renderer};
 
@@ -30,33 +31,6 @@ pub fn create_app_with_dirs<P: Into<PathBuf> + Clone>(content_dir: P, blog_dir: 
     let blog_dir = BlogDir(blog_dir.into());
     let config = BlogConfig::from_file_or_default(content_dir.config_file());
     create_app(content_dir.into(), &blog_dir, config)
-}
-
-// Files part of this project (a simple markdown based blog with fixed style).
-pub struct BlogDir(pub PathBuf);
-
-// Blog content
-pub struct ContentDir(pub PathBuf);
-
-impl BlogDir {
-    pub fn dir(&self) -> PathBuf {
-        self.0.clone()
-    }
-    fn templates_dir(&self) -> PathBuf {
-        self.dir().join("templates")
-    }
-    fn static_dir(&self) -> PathBuf {
-        self.dir().join("static")
-    }
-}
-
-impl ContentDir {
-    pub fn dir(&self) -> PathBuf {
-        self.0.clone()
-    }
-    pub fn config_file(&self) -> PathBuf {
-        self.dir().join("blog_config.yaml")
-    }
 }
 
 fn create_app(content_dir: ContentDir, blog_dir: &BlogDir, config: BlogConfig) -> Router {
@@ -107,4 +81,35 @@ async fn post_handler(
 ) -> Result<Html<String>, StatusCode> {
     let html = blog_handler.post_for(slug).await?;
     Ok(html)
+}
+
+mod directories {
+    use std::path::PathBuf;
+
+    // Files part of this project (a simple markdown based blog with fixed style).
+    pub struct BlogDir(pub PathBuf);
+
+    // Blog content
+    pub struct ContentDir(pub PathBuf);
+
+    impl BlogDir {
+        pub fn dir(&self) -> PathBuf {
+            self.0.clone()
+        }
+        pub fn templates_dir(&self) -> PathBuf {
+            self.dir().join("templates")
+        }
+        pub fn static_dir(&self) -> PathBuf {
+            self.dir().join("static")
+        }
+    }
+
+    impl ContentDir {
+        pub fn dir(&self) -> PathBuf {
+            self.0.clone()
+        }
+        pub fn config_file(&self) -> PathBuf {
+            self.dir().join("blog_config.yaml")
+        }
+    }
 }
