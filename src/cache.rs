@@ -10,14 +10,15 @@ use tokio::sync::RwLock;
 
 use crate::Renderer;
 
+#[derive(Clone)]
 struct HtmlCache {
-    cache: RwLock<HashMap<String, Html<String>>>,
+    cache: Arc<RwLock<HashMap<String, Html<String>>>>,
 }
 
 impl HtmlCache {
     fn new() -> Self {
         Self {
-            cache: RwLock::new(HashMap::new()),
+            cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -30,6 +31,7 @@ impl HtmlCache {
     }
 }
 
+#[derive(Clone)]
 pub struct CachedRenderer {
     renderer: Arc<dyn Renderer + Send + Sync>,
     cache: HtmlCache,
@@ -41,6 +43,20 @@ impl CachedRenderer {
             renderer,
             cache: HtmlCache::new(),
         }
+    }
+
+    pub async fn preload_posts(&self, slugs: Vec<String>) -> Result<(), StatusCode> {
+        // Pre-render all posts and cache them
+        for slug in slugs {
+            let cache_key = format!("post:{}", slug);
+
+            // Only preload if not already cached
+            if self.cache.get(&cache_key).await.is_none() {
+                let rendered_html = self.renderer.post_for(slug).await?;
+                self.cache.insert(cache_key, rendered_html).await;
+            }
+        }
+        Ok(())
     }
 }
 

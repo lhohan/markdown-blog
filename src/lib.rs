@@ -35,10 +35,7 @@ pub fn create_app_with_dirs<P: Into<PathBuf> + Clone>(content_dir: P, blog_dir: 
 
 fn create_app(content_dir: ContentDir, blog_dir: &BlogDir, config: BlogConfig) -> Router {
     let repo = create_repo(content_dir.dir());
-    let blog_handler = BlogPostHandler::new(config, repo, blog_dir);
-
-    let cached_renderer = CachedRenderer::new(Arc::new(blog_handler));
-    let shared_renderer: Arc<dyn Renderer + Send + Sync> = Arc::new(cached_renderer);
+    let renderer = create_renderer(blog_dir, config, repo);
 
     let statics = blog_dir.static_dir();
     let static_service = get_service(ServeDir::new(statics)).handle_error(|error| async move {
@@ -54,11 +51,41 @@ fn create_app(content_dir: ContentDir, blog_dir: &BlogDir, config: BlogConfig) -
         .route("/p/{slug}", get(page_handler))
         .route("/{slug}", get(post_handler))
         .nest_service("/static", static_service)
-        .layer(axum::extract::Extension(shared_renderer))
+        .layer(axum::extract::Extension(renderer))
 }
 
 fn create_repo<P: Into<PathBuf> + Clone>(content_dir: P) -> FileSystemBlogRepository {
     FileSystemBlogRepository::new(content_dir.clone().into())
+}
+
+fn create_renderer(
+    blog_dir: &BlogDir,
+    config: BlogConfig,
+    repo: FileSystemBlogRepository,
+) -> Arc<dyn Renderer + Send + Sync + 'static> {
+    let blog_handler = BlogPostHandler::new(config, repo, blog_dir);
+
+    let slugs = match blog_handler.get_all_post_slugs() {
+        Ok(slugs) => slugs,
+        Err(e) => {
+            eprintln!(
+                "Warning: Could not get post slugs for cache preloading: {:?}",
+                e
+            );
+            Vec::new()
+        }
+    };
+
+    let cached_renderer = CachedRenderer::new(Arc::new(blog_handler));
+    let preloaded_renderer = cached_renderer.clone();
+    tokio::spawn(async move {
+        if let Err(e) = preloaded_renderer.preload_posts(slugs).await {
+            eprintln!("Warning: Cache preloading failed: {:?}", e);
+        }
+    });
+
+    let shared_renderer: Arc<dyn Renderer + Send + Sync> = Arc::new(cached_renderer);
+    shared_renderer
 }
 
 async fn index_handler(

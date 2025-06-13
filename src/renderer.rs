@@ -50,6 +50,15 @@ impl BlogPostHandler {
         }
     }
 
+    pub fn get_all_post_slugs(&self) -> Result<Vec<String>, StatusCode> {
+        let markdowns = self.repo.get_all_posts().map_err(Self::into)?;
+        let slugs = markdowns
+            .into_iter()
+            .map(|markdown| markdown.primary_slug())
+            .collect();
+        Ok(slugs)
+    }
+
     pub async fn render_posts(&self) -> Result<Html<String>, StatusCode> {
         let posts = self.get_all_posts()?;
 
