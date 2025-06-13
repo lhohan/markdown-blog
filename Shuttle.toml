@@ -4,3 +4,5 @@ assets = ["content/*"]
 
 [build]
 assets = ["content/*"]
+bin = "blog-engine-shuttle"
+features = ["shuttle"]

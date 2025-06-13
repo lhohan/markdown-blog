@@ -29,7 +29,7 @@ run-custom host="127.0.0.1" port="3000":
 
 # Run the shuttle server locally
 run-shuttle: collect-deploy-assets
-    cargo shuttle run --features shuttle
+    cargo shuttle run
 
 # Run the main server with restart on changes
 run-w: collect-deploy-assets
@@ -37,7 +37,7 @@ run-w: collect-deploy-assets
 
 # Run the shuttle server with restart on changes
 run-shuttle-w: collect-deploy-assets
-    cargo watch -w src -w content -c -x 'test -- --nocapture' -x 'shuttle run --features shuttle'
+    cargo watch -w src -w content -c -x 'test -- --nocapture' -x 'shuttle run'
 
 # Run tests
 test:
@@ -77,7 +77,7 @@ collect-deploy-assets:
 
 # Deploy to Shuttle
 deploy: test-all collect-deploy-assets
-    cargo shuttle deploy --features shuttle
+    cargo shuttle deploy
 
 # Quick development setup (collect assets and run main server)
 dev: collect-deploy-assets run
@@ -107,38 +107,3 @@ clean:
 # Run benchmarks
 bench:
     cargo bench
-
-# Show available commands
-help:
-    @echo "Blog Engine Commands:"
-    @echo ""
-    @echo "Building:"
-    @echo "  build           - Build main (standalone) binary"
-    @echo "  build-shuttle   - Build shuttle binary"
-    @echo "  build-all       - Build both binaries"
-    @echo ""
-    @echo "Running:"
-    @echo "  run             - Run main server locally"
-    @echo "  run-custom      - Run with custom host/port"
-    @echo "  run-shuttle     - Run shuttle server locally"
-    @echo "  dev             - Quick dev setup (assets + run)"
-    @echo "  dev-w           - Dev with auto-reload"
-    @echo ""
-    @echo "Testing:"
-    @echo "  test            - Run tests"
-    @echo "  test-shuttle    - Run tests with shuttle features"
-    @echo "  test-all        - Run all tests"
-    @echo "  test-w          - Run tests with auto-reload"
-    @echo ""
-    @echo "Deployment:"
-    @echo "  deploy          - Deploy to Shuttle"
-    @echo ""
-    @echo "Development:"
-    @echo "  check-w         - Check with auto-reload"
-    @echo "  run-w           - Run main with auto-reload"
-    @echo "  run-shuttle-w   - Run shuttle with auto-reload"
-    @echo ""
-    @echo "Utilities:"
-    @echo "  run-clippy      - Run linter"
-    @echo "  clean           - Clean build artifacts"
-    @echo "  bench           - Run benchmarks"
