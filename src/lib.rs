@@ -34,24 +34,29 @@ pub fn create_app_with_dirs<P: Into<PathBuf> + Clone>(content_dir: P, blog_dir: 
 }
 
 fn create_app(content_dir: ContentDir, blog_dir: &BlogDir, config: BlogConfig) -> Router {
-    let repo = create_repo(content_dir.dir());
-    let renderer = create_renderer(blog_dir, config, repo);
-
-    let statics = blog_dir.static_dir();
-    let static_service = get_service(ServeDir::new(statics)).handle_error(|error| async move {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Error serving static file: {}", error),
-        )
-    });
+    let renderer = {
+        let repo = create_repo(content_dir.dir());
+        create_renderer(blog_dir, config, repo)
+    };
 
     Router::new()
         .route("/health", get(|| async { "I'm ok!" }))
         .route("/", get(index_handler))
         .route("/p/{slug}", get(page_handler))
         .route("/{slug}", get(post_handler))
-        .nest_service("/static", static_service)
+        .nest_service("/static", static_handler(blog_dir))
         .layer(axum::extract::Extension(renderer))
+}
+
+fn static_handler(blog_dir: &BlogDir) -> shuttle_axum::axum::routing::MethodRouter {
+    let statics = blog_dir.static_dir();
+    let static_handler = get_service(ServeDir::new(statics)).handle_error(|error| async move {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Error serving static file: {}", error),
+        )
+    });
+    static_handler
 }
 
 fn create_repo<P: Into<PathBuf> + Clone>(content_dir: P) -> FileSystemBlogRepository {
