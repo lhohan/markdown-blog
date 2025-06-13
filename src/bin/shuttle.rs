@@ -1,3 +1,4 @@
+#[cfg(feature = "shuttle")]
 #[shuttle_runtime::main]
 async fn main() -> shuttle_axum::ShuttleAxum {
     simple_logger::SimpleLogger::new()
@@ -10,4 +11,9 @@ async fn main() -> shuttle_axum::ShuttleAxum {
 
     let app = blog_engine::create_app_with_defaults();
     Ok(app.into())
+}
+
+#[cfg(not(feature = "shuttle"))]
+fn main() {
+    panic!("This binary requires the 'shuttle' feature to be enabled");
 }

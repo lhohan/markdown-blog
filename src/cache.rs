@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use axum::http::StatusCode;
-use shuttle_axum::axum::response::Html;
+use axum::response::Html;
 
 use async_trait::async_trait;
 

@@ -333,11 +333,11 @@ It should still be displayed properly."#;
 }
 
 mod specification_support {
+    use axum::serve;
+    use axum::Router;
     use blog_engine::create_app_with_dirs;
     use blog_engine::BlogDir;
     use blog_engine::ContentDir;
-    use shuttle_axum::axum::serve;
-    use shuttle_axum::axum::Router;
     use std::fs;
     use std::net::SocketAddr;
     use tempfile::TempDir;

@@ -1,32 +1,67 @@
 content_dir := "./content"
 
+# Build the main (standalone) binary
 build:
-    cargo build --release --bin tt
+    cargo build --release --bin blog-engine-main
 
-# install:
+# Build the shuttle binary
+build-shuttle:
+    cargo build --release --bin blog-engine-shuttle --features shuttle
+
+# Build both binaries
+build-all: build build-shuttle
 
 # Check for warnings continuously
 check-w:
     cargo watch -c -x check
 
-# Run the server
+# Check shuttle-specific code
+check-shuttle:
+    cargo check --bin blog-engine-shuttle --features shuttle
+
+# Run the main server locally
 run: collect-deploy-assets
-    shuttle run
+    cargo run --bin blog-engine-main
 
-# Run the server with restart on changes
+# Run the main server with custom settings
+run-custom host="127.0.0.1" port="3000":
+    HOST="{{host}}" PORT="{{port}}" cargo run --bin blog-engine-main
+
+# Run the shuttle server locally
+run-shuttle: collect-deploy-assets
+    cargo shuttle run --features shuttle
+
+# Run the main server with restart on changes
 run-w: collect-deploy-assets
-    cargo watch -w src -w templates -w static -c -x 'test -- --nocapture' -x 'shuttle run'
+    cargo watch -w src -w content -c -x 'test -- --nocapture' -x 'run --bin blog-engine-main'
 
+# Run the shuttle server with restart on changes
+run-shuttle-w: collect-deploy-assets
+    cargo watch -w src -w content -c -x 'test -- --nocapture' -x 'shuttle run --features shuttle'
+
+# Run tests
 test:
     cargo test
+
+# Run tests with shuttle features
+test-shuttle:
+    cargo test --features shuttle
+
+# Run all tests (both main and shuttle)
+test-all: test test-shuttle
 
 # Run tests on change continuously
 test-w:
     cargo watch -c -x test
 
+# Run tests with shuttle features on change
+test-shuttle-w:
+    cargo watch -c -x 'test --features shuttle'
+
 content_pages_dir := content_dir + "/pages"
 content_posts_dir := content_dir + "/posts"
 
+# Collect and organize assets for deployment/running
 collect-deploy-assets:
     rm -rf {{content_dir}}
 
@@ -40,25 +75,70 @@ collect-deploy-assets:
     cp -r templates {{content_dir}}
     cp blog_config.yaml {{content_dir}}
 
-deploy: test collect-deploy-assets
-    shuttle deploy
+# Deploy to Shuttle
+deploy: test-all collect-deploy-assets
+    cargo shuttle deploy --features shuttle
 
+# Quick development setup (collect assets and run main server)
+dev: collect-deploy-assets run
 
-# Run tests with coverage
-# test-coverage:
-# cargo tarpaulin -- --test-threads=1
+# Quick development with watch (collect assets and run with auto-reload)
+dev-w: collect-deploy-assets run-w
 
-# Run tests with coverage and open the report
-# test-coverage-report:
-# cargo tarpaulin --out Html && open ./tarpaulin-report.html
+# Development with custom host/port
+dev-custom host="0.0.0.0" port="8080": collect-deploy-assets
+    HOST="{{host}}" PORT="{{port}}" cargo run --bin blog-engine-main
 
 # Run extensive Clippy linter checks
 run-clippy:
     cargo clippy --all-targets -- -D clippy::all -D clippy::pedantic
 
+# Run clippy on shuttle-specific code
+run-clippy-shuttle:
+    cargo clippy --all-targets --features shuttle -- -D clippy::all -D clippy::pedantic
+
+# Run clippy on all code
+run-clippy-all: run-clippy run-clippy-shuttle
+
 # Clean the build artifacts
 clean:
     cargo clean
 
+# Run benchmarks
 bench:
     cargo bench
+
+# Show available commands
+help:
+    @echo "Blog Engine Commands:"
+    @echo ""
+    @echo "Building:"
+    @echo "  build           - Build main (standalone) binary"
+    @echo "  build-shuttle   - Build shuttle binary"
+    @echo "  build-all       - Build both binaries"
+    @echo ""
+    @echo "Running:"
+    @echo "  run             - Run main server locally"
+    @echo "  run-custom      - Run with custom host/port"
+    @echo "  run-shuttle     - Run shuttle server locally"
+    @echo "  dev             - Quick dev setup (assets + run)"
+    @echo "  dev-w           - Dev with auto-reload"
+    @echo ""
+    @echo "Testing:"
+    @echo "  test            - Run tests"
+    @echo "  test-shuttle    - Run tests with shuttle features"
+    @echo "  test-all        - Run all tests"
+    @echo "  test-w          - Run tests with auto-reload"
+    @echo ""
+    @echo "Deployment:"
+    @echo "  deploy          - Deploy to Shuttle"
+    @echo ""
+    @echo "Development:"
+    @echo "  check-w         - Check with auto-reload"
+    @echo "  run-w           - Run main with auto-reload"
+    @echo "  run-shuttle-w   - Run shuttle with auto-reload"
+    @echo ""
+    @echo "Utilities:"
+    @echo "  run-clippy      - Run linter"
+    @echo "  clean           - Clean build artifacts"
+    @echo "  bench           - Run benchmarks"

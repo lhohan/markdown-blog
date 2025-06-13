@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use axum::http::StatusCode;
+use axum::response::Html;
 use pulldown_cmark::{html, Options, Parser};
-use shuttle_axum::axum::response::Html;
 use std::sync::Arc;
 use tera::{Context, Tera};
 

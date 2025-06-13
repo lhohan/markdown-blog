@@ -9,7 +9,7 @@ pub use directories::{BlogDir, ContentDir};
 use model::Markdown;
 use renderer::{BlogPostHandler, Renderer};
 
-use shuttle_axum::axum::{
+use axum::{
     extract::Path,
     http::StatusCode,
     response::Html,
@@ -48,7 +48,7 @@ fn create_app(content_dir: ContentDir, blog_dir: &BlogDir, config: BlogConfig) -
         .layer(axum::extract::Extension(renderer))
 }
 
-fn static_handler(blog_dir: &BlogDir) -> shuttle_axum::axum::routing::MethodRouter {
+fn static_handler(blog_dir: &BlogDir) -> axum::routing::MethodRouter {
     let statics = blog_dir.static_dir();
     let static_handler = get_service(ServeDir::new(statics)).handle_error(|error| async move {
         (
