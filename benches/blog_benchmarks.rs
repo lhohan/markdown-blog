@@ -102,34 +102,30 @@ fn benchmark_blog(c: &mut Criterion) {
         TestServer::new(temp_dir).await
     }));
 
+    let client = reqwest::Client::new();
     let mut group = c.benchmark_group("blog_operations");
 
     // Benchmark homepage (all posts)
     group.bench_function("get_all_posts_10k", |b| {
-        b.iter(|| {
-            runtime.block_on(async {
-                let client = reqwest::Client::new();
-                client.get(server.url("/")).send().await.unwrap();
-            });
-        })
+        b.to_async(&runtime).iter(|| async {
+            let response = client.get(server.url("/")).send().await.unwrap();
+            assert!(response.status().is_success());
+        });
     });
 
     // Benchmark rendering a large post
     group.bench_function("render_large_post", |b| {
-        b.iter(|| {
-            runtime.block_on(async {
-                let client = reqwest::Client::new();
-                let response = client
-                    .get(server.url("/large-post"))
-                    .send()
-                    .await
-                    .unwrap()
-                    .text()
-                    .await
-                    .unwrap();
-                assert!(response.contains("Large Test Post")); // Basic validation
-            });
-        })
+        b.to_async(&runtime).iter(|| async {
+            let response = client
+                .get(server.url("/large-post"))
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap();
+            assert!(response.contains("Large Test Post"));
+        });
     });
 
     group.finish();

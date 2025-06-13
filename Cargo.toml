@@ -28,7 +28,7 @@ shuttle-axum = "0.53.0"
 
 [dev-dependencies]
 cargo-watch = "8.4.0"
-criterion = "0.5"
+criterion = { version = "0.5", features = ["async_tokio"] }
 reqwest = "0.11.22"
 tempfile = "3.8.1"
 
