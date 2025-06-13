@@ -2,7 +2,6 @@ mod blog_repository;
 mod cache;
 mod config;
 use blog_repository::{BlogRepository, FileSystemBlogRepository, RepositoryError};
-use cache::Cached;
 pub use config::BlogConfig;
 
 use async_trait::async_trait;
@@ -77,8 +76,6 @@ fn create_app(content_dir: ContentDir, blog_dir: &BlogDir, config: BlogConfig) -
         )
     });
 
-    dbg!("Creating router!");
-
     Router::new()
         .route("/health", get(|| async { "I'm ok!" }))
         .route("/", get(index_handler))
@@ -88,13 +85,8 @@ fn create_app(content_dir: ContentDir, blog_dir: &BlogDir, config: BlogConfig) -
         .layer(axum::extract::Extension(shared_renderer))
 }
 
-fn create_repo<P: Into<PathBuf> + Clone>(content_dir: P) -> Cached<FileSystemBlogRepository> {
-    let file_system_repo = FileSystemBlogRepository::new(content_dir.clone().into());
-    let mut cached_repo = Cached::new(file_system_repo);
-    if let Err(e) = cached_repo.preload_all() {
-        log::error!("Failed to populate initial cache: {:?}", e);
-    }
-    cached_repo
+fn create_repo<P: Into<PathBuf> + Clone>(content_dir: P) -> FileSystemBlogRepository {
+    FileSystemBlogRepository::new(content_dir.clone().into())
 }
 
 async fn index_handler(
