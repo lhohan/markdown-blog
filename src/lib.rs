@@ -86,7 +86,7 @@ async fn post_handler(
 mod directories {
     use std::path::PathBuf;
 
-    // Files part of this project (a simple markdown based blog with fixed style).
+    // Files part of this blog
     pub struct BlogDir(pub PathBuf);
 
     // Blog content
