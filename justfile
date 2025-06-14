@@ -17,19 +17,15 @@ check-w:
 
 # Check shuttle-specific code
 check-shuttle:
-    cargo check --bin blog-engine-shuttle --features shuttle
+    cargo check --bin blog-engine --features shuttle
 
 # Run the main server locally
 run: collect-deploy-assets
     cargo run --bin blog-engine-main
 
-# Run the main server with custom settings
-run-custom host="127.0.0.1" port="3000":
-    HOST="{{host}}" PORT="{{port}}" cargo run --bin blog-engine-main
-
 # Run the shuttle server locally
 run-shuttle: collect-deploy-assets
-    cargo shuttle run
+    shuttle run
 
 # Run the main server with restart on changes
 run-w: collect-deploy-assets
@@ -54,10 +50,6 @@ test-all: test test-shuttle
 test-w:
     cargo watch -c -x test
 
-# Run tests with shuttle features on change
-test-shuttle-w:
-    cargo watch -c -x 'test --features shuttle'
-
 content_pages_dir := content_dir + "/pages"
 content_posts_dir := content_dir + "/posts"
 
@@ -77,28 +69,11 @@ collect-deploy-assets:
 
 # Deploy to Shuttle
 deploy: test-all collect-deploy-assets
-    cargo shuttle deploy
-
-# Quick development setup (collect assets and run main server)
-dev: collect-deploy-assets run
-
-# Quick development with watch (collect assets and run with auto-reload)
-dev-w: collect-deploy-assets run-w
-
-# Development with custom host/port
-dev-custom host="0.0.0.0" port="8080": collect-deploy-assets
-    HOST="{{host}}" PORT="{{port}}" cargo run --bin blog-engine-main
+    shuttle deploy
 
 # Run extensive Clippy linter checks
 run-clippy:
     cargo clippy --all-targets -- -D clippy::all -D clippy::pedantic
-
-# Run clippy on shuttle-specific code
-run-clippy-shuttle:
-    cargo clippy --all-targets --features shuttle -- -D clippy::all -D clippy::pedantic
-
-# Run clippy on all code
-run-clippy-all: run-clippy run-clippy-shuttle
 
 # Clean the build artifacts
 clean:
