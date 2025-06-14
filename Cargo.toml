@@ -42,7 +42,7 @@ name = "blog-engine-main"
 path = "src/bin/main.rs"
 
 [[bin]]
-name = "blog-engine-shuttle"
+name = "blog-engine"            # needs to be the same name as the main binary
 path = "src/bin/shuttle.rs"
 required-features = ["shuttle"]
 
