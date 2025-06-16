@@ -1,0 +1,50 @@
+pre.sourceCode {
+    background-color: #f6f8fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 8px;
+    padding: 1.5em;
+    overflow-x: auto;
+    font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.875em;
+    line-height: 1.45;
+    margin: 1.5em 0;
+    position: relative;
+}
+
+code.sourceCode {
+    padding: 0;
+    background-color: transparent;
+    border: none;
+    font-size: inherit;
+    color: inherit;
+}
+
+.sourceCode .kw { color: #d73a49; }
+.sourceCode .dt { color: #e36209; }
+.sourceCode .dv { color: #005cc5; }
+.sourceCode .bn { color: #005cc5; }
+.sourceCode .fl { color: #005cc5; }
+.sourceCode .ch { color: #032f62; }
+.sourceCode .st { color: #032f62; }
+.sourceCode .co { color: #6a737d; }
+.sourceCode .ot { color: #005cc5; }
+.sourceCode .al { color: #b31d28; }
+.sourceCode .fu { color: #6f42c1; }
+.sourceCode .er { color: #b31d28; font-weight: bold; }
+.sourceCode .wa { color: #b31d28; font-weight: bold; }
+.sourceCode .cn { color: #e36209; }
+.sourceCode .sc { color: #e36209; }
+.sourceCode .vs { color: #032f62; }
+.sourceCode .ss { color: #032f62; }
+.sourceCode .im { color: #005cc5; }
+.sourceCode .va { color: #e36209; }
+.sourceCode .cf { color: #d73a49; }
+.sourceCode .op { color: #d73a49; }
+.sourceCode .bu { color: #b31d28; }
+.sourceCode .ex { color: #b31d28; }
+.source-code .pp { color: #6f42c1; }
+.sourceCode .at { color: #e36209; }
+.sourceCode .do { color: #6a737d; }
+.sourceCode .an { color: #6a737d; }
+.sourceCode .cv { color: #6a737d; }
+.sourceCode .in { color: #6a737d; }

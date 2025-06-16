@@ -1,8 +1,12 @@
 use async_trait::async_trait;
 use axum::http::StatusCode;
 use axum::response::Html;
-use pulldown_cmark::{html, Options, Parser};
+use pulldown_cmark::{html, CodeBlockKind, Event, Options, Parser, Tag};
 use std::sync::Arc;
+
+use syntect::highlighting::{Theme, ThemeSet};
+use syntect::html::highlighted_html_for_string;
+use syntect::parsing::SyntaxSet;
 use tera::{Context, Tera};
 
 use crate::blog_repository::{BlogRepository, RepositoryError};
@@ -24,6 +28,8 @@ pub struct BlogPostHandler {
     repo: ThreadSafeBlogRepository,
     templates: Tera,
     config: BlogConfig,
+    syntax_set: Arc<SyntaxSet>,
+    theme: Arc<Theme>,
 }
 
 impl BlogPostHandler {
@@ -43,10 +49,16 @@ impl BlogPostHandler {
 
         let repo = Arc::new(blog_repo);
 
+        let syntax_set = SyntaxSet::load_defaults_newlines();
+        let theme_set = ThemeSet::load_defaults();
+        let theme = theme_set.themes["base16-ocean.dark"].clone();
+
         Self {
             repo,
             templates,
             config,
+            syntax_set: Arc::new(syntax_set),
+            theme: Arc::new(theme),
         }
     }
 
@@ -95,7 +107,7 @@ impl BlogPostHandler {
         let markdown = page.ok_or(StatusCode::NOT_FOUND)?;
 
         let mut context = self.build_base_context(&format!("/p/{}", slug));
-        insert_content(&markdown, &mut context);
+        self.insert_content(&markdown, &mut context);
         insert_title(&markdown, &mut context);
 
         self.templates
@@ -112,7 +124,7 @@ impl BlogPostHandler {
         let markdown = post.ok_or(StatusCode::NOT_FOUND)?;
 
         let mut context = self.build_base_context(&format!("/{}", slug));
-        insert_content(&markdown, &mut context);
+        self.insert_content(&markdown, &mut context);
         insert_title(&markdown, &mut context);
         insert_published_date(markdown, &mut context);
 
@@ -145,6 +157,68 @@ impl BlogPostHandler {
 
         context
     }
+
+    fn insert_content(&self, markdown: &Markdown, context: &mut Context) {
+        let html_content = self.parse_to_html(markdown);
+        context.insert("content", &html_content);
+    }
+
+    fn parse_to_html(&self, markdown: &Markdown) -> String {
+        let mut options = Options::empty();
+        options.insert(pulldown_cmark::Options::ENABLE_TABLES);
+        options.insert(pulldown_cmark::Options::ENABLE_FOOTNOTES);
+        options.insert(pulldown_cmark::Options::ENABLE_STRIKETHROUGH);
+        options.insert(pulldown_cmark::Options::ENABLE_TASKLISTS);
+        options.insert(pulldown_cmark::Options::ENABLE_SMART_PUNCTUATION);
+
+        let parser = Parser::new_ext(&markdown.content, options);
+        let mut events = Vec::new();
+        let mut code_block: Option<(String, String)> = None;
+
+        for event in parser {
+            match event {
+                Event::Start(Tag::CodeBlock(kind)) => {
+                    let lang = match kind {
+                        CodeBlockKind::Fenced(lang) => lang.into_string(),
+                        CodeBlockKind::Indented => "text".to_string(),
+                    };
+                    code_block = Some((lang, String::new()));
+                }
+                Event::Text(text) => {
+                    if let Some((_, content)) = &mut code_block {
+                        content.push_str(&text);
+                    } else {
+                        events.push(Event::Text(text));
+                    }
+                }
+                Event::End(Tag::CodeBlock(_)) => {
+                    if let Some((lang, content)) = code_block.take() {
+                        let syntax = self
+                            .syntax_set
+                            .find_syntax_by_token(&lang)
+                            .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
+
+                        let highlighted_code = highlighted_html_for_string(
+                            &content,
+                            &self.syntax_set,
+                            syntax,
+                            &self.theme,
+                        )
+                        .unwrap_or_else(|_| content.clone());
+                        let html = format!("<pre><code>{}</code></pre>", highlighted_code);
+                        events.push(Event::Html(html.into()));
+                    }
+                }
+                e => {
+                    events.push(e);
+                }
+            }
+        }
+
+        let mut html_output = String::new();
+        html::push_html(&mut html_output, events.into_iter());
+        html_output
+    }
 }
 
 #[async_trait]
@@ -162,11 +236,6 @@ impl Renderer for BlogPostHandler {
     }
 }
 
-fn insert_content(markdown: &Markdown, context: &mut Context) {
-    let html_content = parse_to_html(markdown);
-    context.insert("content", &html_content);
-}
-
 fn insert_title(markdown: &Markdown, context: &mut Context) {
     if let Some(title) = &markdown.title {
         context.insert("title", &title);
@@ -178,12 +247,4 @@ fn insert_published_date(markdown: Markdown, context: &mut Context) {
         let formatted_date = format_date_for_post_view(*date_str);
         context.insert("date", &formatted_date);
     }
-}
-
-fn parse_to_html(markdown: &Markdown) -> String {
-    let options = Options::empty();
-    let parser = Parser::new_ext(&markdown.content, options);
-    let mut html_content = String::new();
-    html::push_html(&mut html_content, parser);
-    html_content
 }
