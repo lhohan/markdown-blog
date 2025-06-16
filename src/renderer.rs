@@ -28,8 +28,8 @@ pub struct BlogPostHandler {
     repo: ThreadSafeBlogRepository,
     templates: Tera,
     config: BlogConfig,
-    syntax_set: Arc<SyntaxSet>,
-    theme: Arc<Theme>,
+    syntax_set: SyntaxSet,
+    theme: Theme,
 }
 
 impl BlogPostHandler {
@@ -50,15 +50,14 @@ impl BlogPostHandler {
         let repo = Arc::new(blog_repo);
 
         let syntax_set = SyntaxSet::load_defaults_newlines();
-        let theme_set = ThemeSet::load_defaults();
-        let theme = theme_set.themes["base16-ocean.dark"].clone();
+        let theme = ThemeSet::load_defaults().themes["base16-ocean.dark"].clone();
 
         Self {
             repo,
             templates,
             config,
-            syntax_set: Arc::new(syntax_set),
-            theme: Arc::new(theme),
+            syntax_set,
+            theme,
         }
     }
 
@@ -108,7 +107,7 @@ impl BlogPostHandler {
 
         let mut context = self.build_base_context(&format!("/p/{}", slug));
         self.insert_content(&markdown, &mut context);
-        insert_title(&markdown, &mut context);
+        Self::insert_title(&markdown, &mut context);
 
         self.templates
             .render("page.html", &context)
@@ -125,8 +124,8 @@ impl BlogPostHandler {
 
         let mut context = self.build_base_context(&format!("/{}", slug));
         self.insert_content(&markdown, &mut context);
-        insert_title(&markdown, &mut context);
-        insert_published_date(markdown, &mut context);
+        Self::insert_title(&markdown, &mut context);
+        Self::insert_published_date(markdown, &mut context);
 
         self.templates
             .render("post.html", &context)
@@ -161,6 +160,19 @@ impl BlogPostHandler {
     fn insert_content(&self, markdown: &Markdown, context: &mut Context) {
         let html_content = self.parse_to_html(markdown);
         context.insert("content", &html_content);
+    }
+
+    fn insert_title(markdown: &Markdown, context: &mut Context) {
+        if let Some(title) = &markdown.title {
+            context.insert("title", &title);
+        }
+    }
+
+    fn insert_published_date(markdown: Markdown, context: &mut Context) {
+        if let Some(date_str) = &markdown.publish_date {
+            let formatted_date = format_date_for_post_view(*date_str);
+            context.insert("date", &formatted_date);
+        }
     }
 
     fn parse_to_html(&self, markdown: &Markdown) -> String {
@@ -205,7 +217,7 @@ impl BlogPostHandler {
                             &self.theme,
                         )
                         .unwrap_or_else(|_| content.clone());
-                        let html = format!("<pre><code>{}</code></pre>", highlighted_code);
+                        let html = format!("<code>{}</code>", highlighted_code);
                         events.push(Event::Html(html.into()));
                     }
                 }
@@ -233,18 +245,5 @@ impl Renderer for BlogPostHandler {
 
     async fn page_for(&self, slug: String) -> Result<Html<String>, StatusCode> {
         BlogPostHandler::render_page(self, slug).await
-    }
-}
-
-fn insert_title(markdown: &Markdown, context: &mut Context) {
-    if let Some(title) = &markdown.title {
-        context.insert("title", &title);
-    }
-}
-
-fn insert_published_date(markdown: Markdown, context: &mut Context) {
-    if let Some(date_str) = &markdown.publish_date {
-        let formatted_date = format_date_for_post_view(*date_str);
-        context.insert("date", &formatted_date);
     }
 }
