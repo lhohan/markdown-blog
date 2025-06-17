@@ -65,6 +65,26 @@ This is a test blog post.
 }
 
 #[tokio::test]
+async fn can_not_serve_from_slug_when_blog_post_has_front_matter_with_missing_closing_delimiter() {
+    let post_content = r#"---
+title: Test Post
+datePublished: 2023-01-01
+slug: abc123
+
+# Hello World"#;
+
+    BlogServer::with_file("posts/test-post.md", post_content)
+        .start()
+        .await
+        .get("/abc123")
+        .await
+        .expect()
+        .status(404)
+        .verify()
+        .await;
+}
+
+#[tokio::test]
 async fn can_serve_single_blog_post_from_file_name_and_front_matter_slug_at_the_same_time() {
     let post_content = r#"---
 title: Test Post
