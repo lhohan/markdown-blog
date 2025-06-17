@@ -4,7 +4,7 @@ use crate::specification_support::BlogServer;
 
 #[tokio::test]
 async fn health_endpoint_returns_200() {
-    BlogServer::empty()
+    BlogServer::new()
         .start()
         .await
         .get("/health")
@@ -17,7 +17,7 @@ async fn health_endpoint_returns_200() {
 }
 
 #[tokio::test]
-async fn can_serve_single_blog_post() {
+async fn can_serve_single_blog_post_from_file_name() {
     let post_content = r#"---
 title: Test Post
 datePublished: 2023-01-01
@@ -26,8 +26,7 @@ datePublished: 2023-01-01
 
 This is a test blog post.
 "#;
-    BlogServer::empty()
-        .add_file("posts/test-post.md", post_content)
+    BlogServer::with_file("posts/test-post.md", post_content)
         .start()
         .await
         .get("/test-post")
@@ -41,7 +40,7 @@ This is a test blog post.
 }
 
 #[tokio::test]
-async fn can_serve_single_blog_post_with_slug_from_frontmatter() {
+async fn can_serve_single_blog_post_from_frontmatter_slug() {
     let post_content = r#"---
 title: Test Post
 datePublished: 2023-01-01
@@ -66,7 +65,7 @@ This is a test blog post.
 }
 
 #[tokio::test]
-async fn can_serve_single_blog_post_from_multiple_slugs_file_name_and_front_matter_slug() {
+async fn can_serve_single_blog_post_from_file_name_and_front_matter_slug_at_the_same_time() {
     let post_content = r#"---
 title: Test Post
 datePublished: 2023-01-01
@@ -126,22 +125,8 @@ It should still be displayed properly."#;
 }
 
 #[tokio::test]
-async fn returns_404_on_nonexistent_posts() {
-    BlogServer::empty()
-        .start()
-        .await
-        .get("/non-existent-post")
-        .await
-        .expect()
-        .status(404)
-        .verify()
-        .await;
-}
-
-#[tokio::test]
 async fn returns_404_on_nonexistent_post() {
-    BlogServer::empty()
-        .add_file("posts/abc123", "content")
+    BlogServer::new()
         .start()
         .await
         .get("/non-existent-post")
@@ -168,7 +153,7 @@ datePublished: 2023-01-01
 # Second Post Content
 "#;
 
-    BlogServer::empty()
+    BlogServer::new()
         .add_file("posts/first-post.md", post1)
         .add_file("posts/second-post.md", post2)
         .start()
@@ -185,7 +170,7 @@ datePublished: 2023-01-01
 
 #[tokio::test]
 async fn index_page_no_post_when_no_posts() {
-    BlogServer::empty()
+    BlogServer::new()
         .start()
         .await
         .get("/")
@@ -256,7 +241,7 @@ title: Another Undated Post A (should be first among undated, alphabetically)
     ];
 
     // Set up the server with all posts
-    let mut server = BlogServer::empty();
+    let mut server = BlogServer::new();
     for (path, content) in posts {
         server = server.add_file(path, content);
     }
@@ -298,7 +283,7 @@ site_title: "My Custom Blog"
 site_description: "A custom blog description"
 "#;
 
-    BlogServer::empty()
+    BlogServer::new()
         .with_config(config)
         .start()
         .await
@@ -313,13 +298,13 @@ site_description: "A custom blog description"
 }
 
 #[tokio::test]
-async fn can_serve_pages() {
+async fn can_serve_page() {
     let page_content = r#"# Raw Page Title
 
 This is a page without any front matter.
 It should still be displayed properly."#;
 
-    BlogServer::empty()
+    BlogServer::new()
         .add_file("pages/about.md", page_content)
         .start()
         .await
@@ -333,11 +318,11 @@ It should still be displayed properly."#;
 }
 
 mod specification_support {
-    use axum::serve;
     use axum::Router;
-    use blog_engine::create_app_with_dirs;
+    use axum::serve;
     use blog_engine::BlogDir;
     use blog_engine::ContentDir;
+    use blog_engine::create_app_with_dirs;
     use std::fs;
     use std::net::SocketAddr;
     use tempfile::TempDir;
@@ -348,7 +333,7 @@ mod specification_support {
     }
 
     impl BlogServer {
-        pub fn empty() -> Self {
+        pub fn new() -> Self {
             BlogServer {
                 content_on_server: Vec::new(),
                 config: None,
