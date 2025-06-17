@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use axum::http::StatusCode;
 use axum::response::Html;
-use pulldown_cmark::{html, CodeBlockKind, Event, Options, Parser, Tag};
+use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, html};
 use std::sync::Arc;
 
 use syntect::highlighting::{Theme, ThemeSet};
@@ -9,10 +9,10 @@ use syntect::html::highlighted_html_for_string;
 use syntect::parsing::SyntaxSet;
 use tera::{Context, Tera};
 
+use crate::BlogDir;
 use crate::blog_repository::{BlogRepository, RepositoryError};
 use crate::config::BlogConfig;
-use crate::model::{format_date_for_post_view, format_date_for_posts_overview, BlogPost, Markdown};
-use crate::BlogDir;
+use crate::model::{BlogPost, Markdown, format_date_for_post_view, format_date_for_posts_overview};
 
 pub type ThreadSafeBlogRepository = Arc<dyn BlogRepository + Send + Sync>;
 

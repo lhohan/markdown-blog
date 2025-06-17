@@ -64,8 +64,8 @@ impl Markdown {
     }
 
     fn parse_front_matter(content: &str) -> ParsedContent {
-        use gray_matter::engine::YAML;
         use gray_matter::Matter;
+        use gray_matter::engine::YAML;
 
         let matter = Matter::<YAML>::new();
         let result = matter.parse(content);

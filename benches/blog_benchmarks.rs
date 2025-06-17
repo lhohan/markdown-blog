@@ -1,6 +1,6 @@
 use axum::serve;
 use blog_engine::create_app_with_dirs;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;

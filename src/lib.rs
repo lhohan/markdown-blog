@@ -10,11 +10,11 @@ use model::Markdown;
 use renderer::{BlogPostHandler, Renderer};
 
 use axum::{
+    Extension, Router,
     extract::Path,
     http::StatusCode,
     response::Html,
     routing::{get, get_service},
-    Extension, Router,
 };
 use std::path::PathBuf;
 use std::sync::Arc;

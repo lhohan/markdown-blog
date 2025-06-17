@@ -44,7 +44,9 @@ impl BlogConfig {
         match Self::from_file(path) {
             Ok(config) => config,
             Err(e) => {
-                println!("Warning: Could not read config file: {e}. Using default values. To solve create a file named 'blog_config.yaml' in the root directory of your content directory with required fields.");
+                println!(
+                    "Warning: Could not read config file: {e}. Using default values. To solve create a file named 'blog_config.yaml' in the root directory of your content directory with required fields."
+                );
                 Self::default()
             }
         }
