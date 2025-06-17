@@ -1,9 +1,10 @@
+use rstest::rstest;
 use specification_support::IntoAssertion;
 
 use crate::specification_support::BlogServer;
 
 #[tokio::test]
-async fn health_endpoint_returns_200() {
+async fn health_endpoint_should_return_200() {
     BlogServer::new()
         .start()
         .await
@@ -17,7 +18,7 @@ async fn health_endpoint_returns_200() {
 }
 
 #[tokio::test]
-async fn can_serve_single_blog_post_from_file_name() {
+async fn post_should_be_served_from_file_name() {
     let post_content = r#"---
 title: Test Post
 datePublished: 2023-01-01
@@ -40,7 +41,7 @@ This is a test blog post.
 }
 
 #[tokio::test]
-async fn can_serve_single_blog_post_from_frontmatter_slug() {
+async fn post_should_be_served_from_frontmatter_slug() {
     let post_content = r#"---
 title: Test Post
 datePublished: 2023-01-01
@@ -65,18 +66,19 @@ This is a test blog post.
 }
 
 #[tokio::test]
-async fn can_not_serve_from_slug_when_blog_post_has_front_matter_with_missing_closing_delimiter() {
+async fn post_should_not_be_served_from_slug_when_post_has_front_matter_without_closing_delimiter()
+{
     let post_content = r#"---
 title: Test Post
 datePublished: 2023-01-01
-slug: abc123
+slug: hello
 
 # Hello World"#;
 
     BlogServer::with_file("posts/test-post.md", post_content)
         .start()
         .await
-        .get("/abc123")
+        .get("/hello")
         .await
         .expect()
         .status(404)
@@ -85,67 +87,27 @@ slug: abc123
 }
 
 #[tokio::test]
-async fn can_serve_single_blog_post_from_file_name_and_front_matter_slug_at_the_same_time() {
-    let post_content = r#"---
-title: Test Post
-datePublished: 2023-01-01
-slug: abc123
----
-# Hello World
-
-This is a test blog post.
-"#;
-
-    BlogServer::with_file("posts/test-post.md", post_content)
-        .start()
-        .await
-        .get("/abc123") // front matter slug
-        .await
-        .expect()
-        .status(200)
-        .contains("<h1>Hello World</h1>")
-        .contains("This is a test blog post.")
-        .verify()
-        .await;
-
-    BlogServer::with_file("posts/test-post.md", post_content)
-        .start()
-        .await
-        .get("/test-post") // file name
-        .await
-        .expect()
-        .status(200)
-        .contains("<h1>Hello World</h1>")
-        .contains("This is a test blog post.")
-        .verify()
-        .await;
-}
-
-#[tokio::test]
-async fn can_serve_blog_post_without_front_matter() {
-    let post_content_without_front_matter = r#"# Raw Markdown Post
+async fn post_should_be_served_when_there_is_no_front_matter() {
+    let post_content = r#"# Raw Markdown Post
 
 This is a blog post without any front matter.
 It should still be displayed properly."#;
 
-    BlogServer::with_file(
-        "posts/no-front-matter.md",
-        post_content_without_front_matter,
-    )
-    .start()
-    .await
-    .get("/no-front-matter")
-    .await
-    .expect()
-    .status(200)
-    .contains("<h1>Raw Markdown Post</h1>")
-    .contains("This is a blog post without any front matter.")
-    .verify()
-    .await;
+    BlogServer::with_file("posts/no-front-matter.md", post_content)
+        .start()
+        .await
+        .get("/no-front-matter")
+        .await
+        .expect()
+        .status(200)
+        .contains("<h1>Raw Markdown Post</h1>")
+        .contains("This is a blog post without any front matter.")
+        .verify()
+        .await;
 }
 
 #[tokio::test]
-async fn returns_404_on_nonexistent_post() {
+async fn non_existent_slug_should_return_404() {
     BlogServer::new()
         .start()
         .await
@@ -158,7 +120,7 @@ async fn returns_404_on_nonexistent_post() {
 }
 
 #[tokio::test]
-async fn index_page_shows_blog_posts() {
+async fn index_should_show_posts() {
     let post1 = r#"---
 title: First Post
 datePublished: 2023-01-02
@@ -189,7 +151,7 @@ datePublished: 2023-01-01
 }
 
 #[tokio::test]
-async fn index_page_no_post_when_no_posts() {
+async fn index_should_show_no_posts_message_when_no_posts() {
     BlogServer::new()
         .start()
         .await
@@ -203,7 +165,7 @@ async fn index_page_no_post_when_no_posts() {
 }
 
 #[tokio::test]
-async fn index_page_sorts_posts_by_date_newest_first() {
+async fn index_should_sort_posts_by_date_newest_first() {
     // Create posts with various date formats spanning different years
     let posts = [
         (
@@ -297,28 +259,64 @@ title: Another Undated Post A (should be first among undated, alphabetically)
 }
 
 #[tokio::test]
-async fn custom_site_title_appears_in_page() {
+#[rstest]
+async fn all_should_show_custom_title_when_configured(
+    #[values(
+        TestSetupShouldShowCustomTitleWhenConfigured::index(),
+        TestSetupShouldShowCustomTitleWhenConfigured::post(),
+        TestSetupShouldShowCustomTitleWhenConfigured::page()
+    )]
+    setup: TestSetupShouldShowCustomTitleWhenConfigured,
+) {
     let config = r#"
-site_title: "My Custom Blog"
+site_title: "My Custom Blog Title"
 site_description: "A custom blog description"
 "#;
 
-    BlogServer::new()
+    let setup_server = setup.server;
+    let slug_matching_content_on_server = setup.slug.as_str();
+
+    setup_server
         .with_config(config)
         .start()
         .await
-        .get("/")
+        .get(slug_matching_content_on_server)
         .await
         .expect()
         .status(200)
-        .contains("My Custom Blog")
+        .contains("My Custom Blog Title")
         .not_contains("Your Blog") // the default site title
         .verify()
         .await;
 }
 
+struct TestSetupShouldShowCustomTitleWhenConfigured {
+    server: BlogServer,
+    slug: String,
+}
+impl TestSetupShouldShowCustomTitleWhenConfigured {
+    fn index() -> Self {
+        Self {
+            server: BlogServer::new(),
+            slug: "/".to_string(),
+        }
+    }
+    fn post() -> Self {
+        Self {
+            server: BlogServer::with_file("posts/post.md", "# Post Title"),
+            slug: "/post".to_string(),
+        }
+    }
+    fn page() -> Self {
+        Self {
+            server: BlogServer::with_file("pages/page.md", "# Page Title"),
+            slug: "/p/page".to_string(),
+        }
+    }
+}
+
 #[tokio::test]
-async fn can_serve_page() {
+async fn page_should_be_served() {
     let page_content = r#"# Raw Page Title
 
 This is a page without any front matter.
