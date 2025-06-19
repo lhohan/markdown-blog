@@ -14,7 +14,7 @@ async fn health_endpoint_should_return_200() {
 }
 
 #[tokio::test]
-async fn post_should_be_served_from_file_name() {
+async fn post_should_be_accessible_via_filename() {
     let post_content = "---
 title: Test Post
 datePublished: 2023-01-01
@@ -34,7 +34,7 @@ This is a test blog post.
 }
 
 #[tokio::test]
-async fn post_should_be_served_from_slug_from_frontmatter() {
+async fn post_should_be_accessible_via_slug_when_slug_in_frontmatter() {
     let post_content = "---
 slug: hello
 ---
@@ -50,7 +50,7 @@ slug: hello
 }
 
 #[tokio::test]
-async fn post_should_contain_simple_markdown_content() {
+async fn post_should_render_markdown_content() {
     let post_content = "---
 slug: hello
 ---
@@ -67,7 +67,7 @@ This is a test blog post.
 }
 
 #[tokio::test]
-async fn post_should_contain_title_from_frontmatter() {
+async fn post_should_display_title_when_title_in_frontmatter() {
     let post_content = "---
 title: Hello World
 slug: hello
@@ -84,7 +84,7 @@ slug: hello
 }
 
 #[tokio::test]
-async fn post_should_contain_date_published_from_frontmatter() {
+async fn post_should_display_date_when_date_in_frontmatter() {
     let post_content = "---
 datePublished: 2023-01-01
 slug: hello
@@ -102,7 +102,7 @@ slug: hello
 }
 
 #[tokio::test]
-async fn post_should_not_be_served_from_slug_when_front_matter_misses_closing_delimiter() {
+async fn post_should_return_404_when_frontmatter_malformed() {
     let post_content = "---
 slug: hello
 ";
@@ -117,7 +117,7 @@ slug: hello
 }
 
 #[tokio::test]
-async fn post_should_be_served_from_filename_when_there_is_no_front_matter() {
+async fn post_should_be_accessible_via_filename_when_no_frontmatter() {
     let post_content = "";
 
     BlogServer::with_file("posts/no-front-matter.md", post_content)
@@ -130,7 +130,7 @@ async fn post_should_be_served_from_filename_when_there_is_no_front_matter() {
 }
 
 #[tokio::test]
-async fn non_existent_slug_should_return_404() {
+async fn server_should_return_404_when_post_not_found() {
     BlogServer::new()
         .scenario()
         .get("/non-existent-post")
@@ -141,7 +141,7 @@ async fn non_existent_slug_should_return_404() {
 }
 
 #[tokio::test]
-async fn index_should_show_posts() {
+async fn index_should_display_posts() {
     let post1 = "---
 title: Post One
 ---
@@ -166,7 +166,7 @@ title: Post Two
 }
 
 #[tokio::test]
-async fn index_should_show_no_posts_message_when_no_posts() {
+async fn index_should_display_empty_message_when_no_posts() {
     BlogServer::new()
         .scenario()
         .get("/")
@@ -177,7 +177,7 @@ async fn index_should_show_no_posts_message_when_no_posts() {
 }
 
 #[tokio::test]
-async fn index_should_sort_posts_by_date_newest_first() {
+async fn index_should_sort_posts_by_date_descending() {
     let posts = [
         (
             "posts/oldest.md",
@@ -219,7 +219,7 @@ async fn index_should_sort_posts_by_date_newest_first() {
 
 #[tokio::test]
 #[rstest]
-async fn all_should_show_custom_title_when_configured(
+async fn all_should_display_custom_title_when_configured(
     #[values(
         CustomTitleTestSetup::index(),
         CustomTitleTestSetup::post(),
@@ -271,7 +271,7 @@ impl CustomTitleTestSetup {
 }
 
 #[tokio::test]
-async fn page_should_be_accessible_at_p_url() {
+async fn page_should_be_accessible_via_p_prefix() {
     let page_content = "# Test Page
 
 Content here.";
