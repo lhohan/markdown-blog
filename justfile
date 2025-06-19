@@ -82,3 +82,11 @@ clean:
 # Run benchmarks
 bench:
     cargo bench
+
+# Run tests with coverage
+test-coverage:
+    cargo tarpaulin -- --test-threads=1
+
+# Run tests with coverage and open the report
+test-coverage-report:
+    cargo tarpaulin --out Html && open ./tarpaulin-report.html
