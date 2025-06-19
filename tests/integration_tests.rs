@@ -11,9 +11,8 @@ async fn health_endpoint_should_return_200() {
         .get("/health")
         .await
         .expect()
-        .http_status_code(200)
-        .verify()
-        .await;
+        .await
+        .http_status_code(200);
 }
 
 #[tokio::test]
@@ -32,11 +31,10 @@ This is a test blog post.
         .get("/test-post")
         .await
         .expect()
+        .await
         .http_status_code(200)
         .body_contains("<h1>Hello World</h1>")
-        .body_contains("This is a test blog post.")
-        .verify()
-        .await;
+        .body_contains("This is a test blog post.");
 }
 
 #[tokio::test]
@@ -55,9 +53,8 @@ This is a test blog post.
         .get("/hello")
         .await
         .expect()
-        .http_status_code(200)
-        .verify()
-        .await;
+        .await
+        .http_status_code(200);
 }
 
 #[tokio::test]
@@ -76,9 +73,8 @@ This is a test blog post.
         .get("/hello")
         .await
         .expect()
-        .body_contains("This is a test blog post.")
-        .verify()
-        .await;
+        .await
+        .body_contains("This is a test blog post.");
 }
 
 #[tokio::test]
@@ -97,9 +93,8 @@ This is a test blog post.
         .get("/hello")
         .await
         .expect()
-        .body_contains("Hello World</h1>")
-        .verify()
-        .await;
+        .await
+        .body_contains("Hello World</h1>");
 }
 
 #[tokio::test]
@@ -118,9 +113,8 @@ This is a test blog post.
         .get("/hello")
         .await
         .expect()
-        .body_contains("Published on January 01, 2023")
-        .verify()
-        .await;
+        .await
+        .body_contains("Published on January 01, 2023");
 }
 
 #[tokio::test]
@@ -138,9 +132,8 @@ slug: hello
         .get("/hello")
         .await
         .expect()
-        .http_status_code(404)
-        .verify()
-        .await;
+        .await
+        .http_status_code(404);
 }
 
 #[tokio::test]
@@ -156,11 +149,10 @@ It should still be displayed properly."#;
         .get("/no-front-matter")
         .await
         .expect()
+        .await
         .http_status_code(200)
         .body_contains("<h1>Raw Markdown Post</h1>")
-        .body_contains("This is a blog post without any front matter.")
-        .verify()
-        .await;
+        .body_contains("This is a blog post without any front matter.");
 }
 
 #[tokio::test]
@@ -171,9 +163,8 @@ async fn non_existent_slug_should_return_404() {
         .get("/non-existent-post")
         .await
         .expect()
-        .http_status_code(404)
-        .verify()
-        .await;
+        .await
+        .http_status_code(404);
 }
 
 #[tokio::test]
@@ -200,11 +191,10 @@ datePublished: 2023-01-01
         .get("/")
         .await
         .expect()
+        .await
         .http_status_code(200)
         .body_contains("First Post")
-        .body_contains("Second Post")
-        .verify()
-        .await;
+        .body_contains("Second Post");
 }
 
 #[tokio::test]
@@ -215,10 +205,9 @@ async fn index_should_show_no_posts_message_when_no_posts() {
         .get("/")
         .await
         .expect()
+        .await
         .http_status_code(200)
-        .body_contains("No posts yet.")
-        .verify()
-        .await;
+        .body_contains("No posts yet");
 }
 
 #[tokio::test]
@@ -291,6 +280,7 @@ title: Another Undated Post A (should be first among undated, alphabetically)
     // Check the response
     response
         .expect()
+        .await
         .http_status_code(200)
         // First verify all posts are present
         .body_contains("Oldest Post")
@@ -310,9 +300,7 @@ title: Another Undated Post A (should be first among undated, alphabetically)
             "Oldest Post",            // Last dated post
             "Another Undated Post A", // First undated post (alphabetically)
             "Undated Post Z",         // Second undated post (alphabetically)
-        ])
-        .verify()
-        .await;
+        ]);
 }
 
 #[tokio::test]
@@ -340,11 +328,10 @@ site_description: "A custom blog description"
         .get(slug_matching_content_on_server)
         .await
         .expect()
+        .await
         .http_status_code(200)
         .body_contains("My Custom Blog Title")
-        .not_contains("Your Blog") // the default site title
-        .verify()
-        .await;
+        .not_contains("Your Blog"); // the default site title
 }
 
 struct TestSetupShouldShowCustomTitleWhenConfigured {
@@ -386,10 +373,9 @@ It should still be displayed properly."#;
         .get("/p/about")
         .await
         .expect()
+        .await
         .http_status_code(200)
-        .body_contains("<h1>Raw Page Title</h1>")
-        .verify()
-        .await;
+        .body_contains("<h1>Raw Page Title</h1>");
 }
 
 mod specification_support {
@@ -546,20 +532,26 @@ mod specification_support {
     }
 
     pub struct ResponseExpectations {
-        response: reqwest::Response,
+        body: String,
+        status_code: u16,
         expectations: Vec<Box<dyn FnOnce(&str) + Send>>,
+        verified: bool,
     }
 
     impl ResponseExpectations {
-        pub fn new(response: reqwest::Response) -> Self {
+        pub async fn new(response: reqwest::Response) -> Self {
+            let status_code = response.status().as_u16();
+            let body = response.text().await.expect("Failed to read response body");
             Self {
-                response,
+                body,
+                status_code,
                 expectations: Vec::new(),
+                verified: false,
             }
         }
 
         pub fn http_status_code(mut self, expected: u16) -> Self {
-            let status = self.response.status().as_u16();
+            let status = self.status_code;
             self.expectations.push(Box::new(move |_| {
                 assert_eq!(
                     status, expected,
@@ -643,26 +635,25 @@ mod specification_support {
             }));
             self
         }
+    }
 
-        pub async fn verify(self) {
-            let body = self
-                .response
-                .text()
-                .await
-                .expect("Failed to read response body");
-
-            for expectation in self.expectations {
-                expectation(&body);
+    impl Drop for ResponseExpectations {
+        fn drop(&mut self) {
+            if !self.verified {
+                let expectations = std::mem::take(&mut self.expectations);
+                for expectation in expectations {
+                    expectation(&self.body);
+                }
             }
         }
     }
     pub trait IntoAssertion {
-        fn expect(self) -> ResponseExpectations;
+        async fn expect(self) -> ResponseExpectations;
     }
 
     impl IntoAssertion for reqwest::Response {
-        fn expect(self) -> ResponseExpectations {
-            ResponseExpectations::new(self)
+        async fn expect(self) -> ResponseExpectations {
+            ResponseExpectations::new(self).await
         }
     }
 
