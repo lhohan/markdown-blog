@@ -296,6 +296,8 @@ mod specification_support {
     use std::net::SocketAddr;
     use tempfile::TempDir;
 
+    // ===== 1. PUBLIC (TEST) API TYPES =====
+
     pub struct BlogServer {
         content_on_server: Vec<FileOnServer>,
         config: Option<String>,
@@ -343,7 +345,7 @@ mod specification_support {
             Scenario { server: self }
         }
 
-        pub async fn start(self) -> RunningServer {
+        async fn start(self) -> RunningServer {
             let temp_dir = TempDir::new().unwrap();
             let temp_path = temp_dir.path().to_owned();
 
@@ -367,20 +369,145 @@ mod specification_support {
             let app = create_app_with_dirs(temp_path, blog_dir.dir());
             let (server_addr, shutdown_tx, server_handle) = start_test_server(app).await;
 
-            // Keep temp_dir in the RunningServer so it lives as long as the server
             RunningServer::new(server_addr, shutdown_tx, server_handle, temp_dir)
         }
     }
 
-    pub struct RunningServer {
+    pub struct Scenario {
+        server: BlogServer,
+    }
+
+    impl Scenario {
+        pub fn get(self, path: &str) -> Obtained {
+            Obtained {
+                server: self.server,
+                path: path.to_string(),
+            }
+        }
+    }
+
+    pub struct Obtained {
+        server: BlogServer,
+        path: String,
+    }
+
+    impl Obtained {
+        pub fn expect(self) -> Expectations {
+            Expectations {
+                server: self.server,
+                path: self.path,
+                assertions: Vec::new(),
+            }
+        }
+    }
+
+    pub struct Expectations {
+        server: BlogServer,
+        path: String,
+        assertions: Vec<Box<dyn FnOnce(&Response) + Send>>,
+    }
+
+    impl Expectations {
+        pub fn status_code(mut self, expected: u16) -> Self {
+            self.assertions.push(Box::new(move |response| {
+                assert_eq!(
+                    response.status_code, expected,
+                    "Expected status code {}, got {}",
+                    expected, response.status_code
+                );
+            }));
+            self
+        }
+
+        pub fn body_contains(mut self, text: &str) -> Self {
+            let text = text.to_string();
+            self.assertions.push(Box::new(move |response| {
+                assert!(
+                    response.body.contains(&text),
+                    "Response body does not contain '{}'. Full body:\n{}",
+                    text,
+                    response.body
+                );
+            }));
+            self
+        }
+
+        pub fn not_contains(mut self, text: &str) -> Self {
+            let text = text.to_string();
+            self.assertions.push(Box::new(move |response| {
+                assert!(
+                    !response.body.contains(&text),
+                    "Response body should not contain '{}'. Full body:\n{}",
+                    text,
+                    response.body
+                );
+            }));
+            self
+        }
+
+        pub fn contains_in_order(mut self, items: &[&str]) -> Self {
+            // TODO: Review this implementation. Seems to work but copy-pasted from Claude.
+            let items: Vec<String> = items.iter().map(|s| s.to_string()).collect();
+            self.assertions.push(Box::new(move |response| {
+                let mut last_pos = 0;
+
+                for (i, substring) in items.iter().enumerate() {
+                    match response.body[last_pos..].find(substring) {
+                        Some(pos) => {
+                            last_pos += pos + substring.len();
+                        }
+                        None => {
+                            panic!(
+                                "Expected to find '{}' after position {}. Items should appear in order: {:?}. Full body:\n{}",
+                                substring, last_pos, items, response.body
+                            );
+                        }
+                    }
+
+                    if i < items.len() - 1 {
+                        let next = &items[i + 1];
+                        if response.body[last_pos..].find(next).is_none() {
+                            panic!(
+                                "Expected to find '{}' after '{}', but it was not found. Full body:\n{}",
+                                next, substring, response.body
+                            );
+                        }
+                    }
+                }
+            }));
+            self
+        }
+
+        pub async fn execute(self) {
+            let server = self.server.start().await;
+            let http_response = server.get(&self.path).await;
+
+            let response = Response {
+                status_code: http_response.status().as_u16(),
+                body: http_response
+                    .text()
+                    .await
+                    .expect("Failed to read response body"),
+            };
+
+            // Run all assertions
+            for assertion in self.assertions {
+                assertion(&response);
+            }
+        }
+    }
+
+    // ===== 2. INTERNAL SERVER TYPES =====
+
+    struct RunningServer {
         server_addr: SocketAddr,
         shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
         server_handle: Option<tokio::task::JoinHandle<()>>,
-        _temp_dir: TempDir, // Keep the directory alive as long as the server
+        _temp_dir: TempDir,
     }
 
     impl RunningServer {
-        pub fn new(
+        fn new(
             server_addr: SocketAddr,
             shutdown_tx: tokio::sync::oneshot::Sender<()>,
             server_handle: tokio::task::JoinHandle<()>,
@@ -394,7 +521,7 @@ mod specification_support {
             }
         }
 
-        pub async fn get(&self, path: &str) -> reqwest::Response {
+        async fn get(&self, path: &str) -> reqwest::Response {
             let url = format!("http://{}{}", self.server_addr, path);
             reqwest::Client::new().get(url).send().await.unwrap()
         }
@@ -415,6 +542,20 @@ mod specification_support {
             self.shutdown_sync();
         }
     }
+
+    // ===== 3. HELPER TYPES =====
+
+    struct Response {
+        body: String,
+        status_code: u16,
+    }
+
+    struct FileOnServer {
+        content: String,
+        target_path: String,
+    }
+
+    // ===== 4. HELPER FUNCTIONS =====
 
     async fn start_test_server(
         app: Router,
@@ -441,201 +582,5 @@ mod specification_support {
         });
 
         (server_addr, shutdown_tx, server_handle)
-    }
-
-    pub struct ResponseExpectations {
-        body: String,
-        status_code: u16,
-        expectations: Vec<Box<dyn FnOnce(&str) + Send>>,
-        verified: bool,
-    }
-
-    impl ResponseExpectations {
-        pub fn http_status_code(mut self, expected: u16) -> Self {
-            let status = self.status_code;
-            self.expectations.push(Box::new(move |_| {
-                assert_eq!(
-                    status, expected,
-                    "Expected status code {}, got {}",
-                    expected, status
-                );
-            }));
-            self
-        }
-
-        pub fn body_contains(mut self, substring: &str) -> Self {
-            let substring = substring.to_string();
-            self.expectations.push(Box::new(move |body| {
-                assert!(
-                    body.contains(&substring),
-                    "Response body does not contain '{}'. Full body:\n{}",
-                    substring,
-                    body
-                );
-            }));
-            self
-        }
-
-        // TODO: Review this implementation. Seems to work but copy-pasted from Claude.
-        pub fn contains_in_order(mut self, substrings: &[&str]) -> Self {
-            // Clone the substrings for the closure
-            let substrings: Vec<String> = substrings.iter().map(|s| s.to_string()).collect();
-
-            self.expectations.push(Box::new(move |body| {
-                    let mut last_pos = 0;
-
-                    for (i, substring) in substrings.iter().enumerate() {
-                        match body[last_pos..].find(substring) {
-                            Some(pos) => {
-                                // Update position for next search
-                                last_pos += pos + substring.len();
-                            }
-                            None => {
-                                assert!(
-                                    false,
-                                    "Expected to find '{}' after position {}. Items should appear in order: {:?}. Full body:\n{}",
-                                    substring,
-                                    last_pos,
-                                    substrings,
-                                    body
-                                );
-                            }
-                        }
-
-                        // For all but the last item, ensure the next item comes after this one
-                        if i < substrings.len() - 1 {
-                            let next = &substrings[i + 1];
-                            match body[last_pos..].find(next) {
-                                Some(_) => { /* This is good, the next item appears after this one */ }
-                                None => {
-                                    assert!(
-                                        false,
-                                        "Expected to find '{}' after '{}', but it was not found. Full body:\n{}",
-                                        next,
-                                        substring,
-                                        body
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }));
-
-            self
-        }
-
-        pub fn not_contains(mut self, substring: &str) -> Self {
-            let substring = substring.to_string();
-            self.expectations.push(Box::new(move |body| {
-                assert!(
-                    !body.contains(&substring),
-                    "Response body should not contain '{}'. Full body:\n{}",
-                    substring,
-                    body
-                );
-            }));
-            self
-        }
-    }
-
-    impl Drop for ResponseExpectations {
-        fn drop(&mut self) {
-            if !self.verified {
-                let expectations = std::mem::take(&mut self.expectations);
-                for expectation in expectations {
-                    expectation(&self.body);
-                }
-            }
-        }
-    }
-
-    struct FileOnServer {
-        content: String,
-        target_path: String,
-    }
-
-    pub struct Scenario {
-        server: BlogServer,
-    }
-
-    pub struct Obtained {
-        server: BlogServer,
-        path: String,
-    }
-
-    pub struct Expectations {
-        server: BlogServer,
-        path: String,
-        assertions: Vec<Box<dyn FnOnce(ResponseExpectations) -> ResponseExpectations + Send>>,
-    }
-
-    impl Scenario {
-        pub fn get(self, path: &str) -> Obtained {
-            Obtained {
-                server: self.server,
-                path: path.to_string(),
-            }
-        }
-    }
-
-    impl Obtained {
-        pub fn expect(self) -> Expectations {
-            Expectations {
-                server: self.server,
-                path: self.path,
-                assertions: Vec::new(),
-            }
-        }
-    }
-
-    impl Expectations {
-        pub fn status_code(mut self, code: u16) -> Self {
-            self.assertions
-                .push(Box::new(move |resp| resp.http_status_code(code)));
-            self
-        }
-
-        pub fn body_contains(mut self, text: &str) -> Self {
-            let text = text.to_string();
-            self.assertions
-                .push(Box::new(move |resp| resp.body_contains(&text)));
-            self
-        }
-
-        pub fn not_contains(mut self, text: &str) -> Self {
-            let text = text.to_string();
-            self.assertions
-                .push(Box::new(move |resp| resp.not_contains(&text)));
-            self
-        }
-
-        pub fn contains_in_order(mut self, items: &[&str]) -> Self {
-            let items: Vec<String> = items.iter().map(|s| s.to_string()).collect();
-            self.assertions.push(Box::new(move |resp| {
-                let item_refs: Vec<&str> = items.iter().map(|s| s.as_str()).collect();
-                resp.contains_in_order(&item_refs)
-            }));
-            self
-        }
-
-        pub async fn execute(self) {
-            let server = self.server.start().await;
-            let response = server.get(&self.path).await;
-
-            let status_code = response.status().as_u16();
-            let body = response.text().await.expect("Failed to read response body");
-            let mut expectations = ResponseExpectations {
-                body,
-                status_code,
-                expectations: Vec::new(),
-                verified: false,
-            };
-
-            for assertion in self.assertions {
-                expectations = assertion(expectations);
-            }
-
-            std::mem::drop(expectations); // Technically not needed as the expectations will be dropped here automatically triggering the assertions
-        }
     }
 }
