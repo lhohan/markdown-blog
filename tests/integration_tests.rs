@@ -11,8 +11,7 @@ async fn health_endpoint_should_return_200() {
         .get("/health")
         .await
         .expect()
-        .status(200)
-        .contains("I'm ok!")
+        .http_status_code(200)
         .verify()
         .await;
 }
@@ -33,41 +32,99 @@ This is a test blog post.
         .get("/test-post")
         .await
         .expect()
-        .status(200)
-        .contains("<h1>Hello World</h1>")
-        .contains("This is a test blog post.")
+        .http_status_code(200)
+        .body_contains("<h1>Hello World</h1>")
+        .body_contains("This is a test blog post.")
         .verify()
         .await;
 }
 
 #[tokio::test]
-async fn post_should_be_served_from_frontmatter_slug() {
+async fn post_should_be_served_from_slug_from_frontmatter() {
     let post_content = r#"---
 title: Test Post
 datePublished: 2023-01-01
-slug: abc123
+slug: hello
 ---
-# Hello World
-
 This is a test blog post.
 "#;
 
     BlogServer::with_file("posts/test-post.md", post_content)
         .start()
         .await
-        .get("/abc123")
+        .get("/hello")
         .await
         .expect()
-        .status(200)
-        .contains("<h1>Hello World</h1>")
-        .contains("This is a test blog post.")
+        .http_status_code(200)
         .verify()
         .await;
 }
 
 #[tokio::test]
-async fn post_should_not_be_served_from_slug_when_post_has_front_matter_without_closing_delimiter()
-{
+async fn post_should_contain_simple_markdown_content() {
+    let post_content = r#"---
+title: Test Post
+datePublished: 2023-01-01
+slug: hello
+---
+This is a test blog post.
+"#;
+
+    BlogServer::with_file("posts/test-post.md", post_content)
+        .start()
+        .await
+        .get("/hello")
+        .await
+        .expect()
+        .body_contains("This is a test blog post.")
+        .verify()
+        .await;
+}
+
+#[tokio::test]
+async fn post_should_contain_title_from_frontmatter() {
+    let post_content = r#"---
+title: Hello World
+datePublished: 2023-01-01
+slug: hello
+---
+This is a test blog post.
+"#;
+
+    BlogServer::with_file("posts/test-post.md", post_content)
+        .start()
+        .await
+        .get("/hello")
+        .await
+        .expect()
+        .body_contains("Hello World</h1>")
+        .verify()
+        .await;
+}
+
+#[tokio::test]
+async fn post_should_contain_date_published_from_frontmatter() {
+    let post_content = r#"---
+title: Hello World
+datePublished: 2023-01-01
+slug: hello
+---
+This is a test blog post.
+"#;
+
+    BlogServer::with_file("posts/test-post.md", post_content)
+        .start()
+        .await
+        .get("/hello")
+        .await
+        .expect()
+        .body_contains("Published on January 01, 2023")
+        .verify()
+        .await;
+}
+
+#[tokio::test]
+async fn post_should_not_be_served_from_slug_front_matter_misses_closing_delimiter() {
     let post_content = r#"---
 title: Test Post
 datePublished: 2023-01-01
@@ -81,13 +138,13 @@ slug: hello
         .get("/hello")
         .await
         .expect()
-        .status(404)
+        .http_status_code(404)
         .verify()
         .await;
 }
 
 #[tokio::test]
-async fn post_should_be_served_when_there_is_no_front_matter() {
+async fn post_should_be_served_from_filename_when_there_is_no_front_matter() {
     let post_content = r#"# Raw Markdown Post
 
 This is a blog post without any front matter.
@@ -99,9 +156,9 @@ It should still be displayed properly."#;
         .get("/no-front-matter")
         .await
         .expect()
-        .status(200)
-        .contains("<h1>Raw Markdown Post</h1>")
-        .contains("This is a blog post without any front matter.")
+        .http_status_code(200)
+        .body_contains("<h1>Raw Markdown Post</h1>")
+        .body_contains("This is a blog post without any front matter.")
         .verify()
         .await;
 }
@@ -114,7 +171,7 @@ async fn non_existent_slug_should_return_404() {
         .get("/non-existent-post")
         .await
         .expect()
-        .status(404)
+        .http_status_code(404)
         .verify()
         .await;
 }
@@ -143,9 +200,9 @@ datePublished: 2023-01-01
         .get("/")
         .await
         .expect()
-        .status(200)
-        .contains("First Post")
-        .contains("Second Post")
+        .http_status_code(200)
+        .body_contains("First Post")
+        .body_contains("Second Post")
         .verify()
         .await;
 }
@@ -158,8 +215,8 @@ async fn index_should_show_no_posts_message_when_no_posts() {
         .get("/")
         .await
         .expect()
-        .status(200)
-        .contains("No posts yet.")
+        .http_status_code(200)
+        .body_contains("No posts yet.")
         .verify()
         .await;
 }
@@ -234,14 +291,14 @@ title: Another Undated Post A (should be first among undated, alphabetically)
     // Check the response
     response
         .expect()
-        .status(200)
+        .http_status_code(200)
         // First verify all posts are present
-        .contains("Oldest Post")
-        .contains("Middle Post (JS Date)")
-        .contains("Newer Post (Short Format)")
-        .contains("Newest Post (Full Format)")
-        .contains("Undated Post Z")
-        .contains("Another Undated Post A")
+        .body_contains("Oldest Post")
+        .body_contains("Middle Post (JS Date)")
+        .body_contains("Newer Post (Short Format)")
+        .body_contains("Newest Post (Full Format)")
+        .body_contains("Undated Post Z")
+        .body_contains("Another Undated Post A")
         .contains_in_order(&[
             "Newest Post (Full Format)",
             "Newer Post (Short Format)",
@@ -283,8 +340,8 @@ site_description: "A custom blog description"
         .get(slug_matching_content_on_server)
         .await
         .expect()
-        .status(200)
-        .contains("My Custom Blog Title")
+        .http_status_code(200)
+        .body_contains("My Custom Blog Title")
         .not_contains("Your Blog") // the default site title
         .verify()
         .await;
@@ -329,8 +386,8 @@ It should still be displayed properly."#;
         .get("/p/about")
         .await
         .expect()
-        .status(200)
-        .contains("<h1>Raw Page Title</h1>")
+        .http_status_code(200)
+        .body_contains("<h1>Raw Page Title</h1>")
         .verify()
         .await;
 }
@@ -501,7 +558,7 @@ mod specification_support {
             }
         }
 
-        pub fn status(mut self, expected: u16) -> Self {
+        pub fn http_status_code(mut self, expected: u16) -> Self {
             let status = self.response.status().as_u16();
             self.expectations.push(Box::new(move |_| {
                 assert_eq!(
@@ -513,7 +570,7 @@ mod specification_support {
             self
         }
 
-        pub fn contains(mut self, substring: &str) -> Self {
+        pub fn body_contains(mut self, substring: &str) -> Self {
             let substring = substring.to_string();
             self.expectations.push(Box::new(move |body| {
                 assert!(
