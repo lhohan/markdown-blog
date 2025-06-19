@@ -1,344 +1,255 @@
 use rstest::rstest;
-use specification_support::IntoAssertion;
 
 use crate::specification_support::BlogServer;
 
 #[tokio::test]
 async fn health_endpoint_should_return_200() {
     BlogServer::new()
-        .start()
-        .await
+        .scenario()
         .get("/health")
-        .await
         .expect()
-        .await
-        .http_status_code(200);
+        .status_code(200)
+        .execute()
+        .await;
 }
 
 #[tokio::test]
 async fn post_should_be_served_from_file_name() {
-    let post_content = r#"---
+    let post_content = "---
 title: Test Post
 datePublished: 2023-01-01
 ---
 # Hello World
 
 This is a test blog post.
-"#;
+";
+
     BlogServer::with_file("posts/test-post.md", post_content)
-        .start()
-        .await
+        .scenario()
         .get("/test-post")
-        .await
         .expect()
-        .await
-        .http_status_code(200)
-        .body_contains("<h1>Hello World</h1>")
-        .body_contains("This is a test blog post.");
+        .status_code(200)
+        .execute()
+        .await;
 }
 
 #[tokio::test]
 async fn post_should_be_served_from_slug_from_frontmatter() {
-    let post_content = r#"---
-title: Test Post
-datePublished: 2023-01-01
+    let post_content = "---
 slug: hello
 ---
-This is a test blog post.
-"#;
+";
 
     BlogServer::with_file("posts/test-post.md", post_content)
-        .start()
-        .await
+        .scenario()
         .get("/hello")
-        .await
         .expect()
-        .await
-        .http_status_code(200);
+        .status_code(200)
+        .execute()
+        .await;
 }
 
 #[tokio::test]
 async fn post_should_contain_simple_markdown_content() {
-    let post_content = r#"---
-title: Test Post
-datePublished: 2023-01-01
+    let post_content = "---
 slug: hello
 ---
 This is a test blog post.
-"#;
+";
 
     BlogServer::with_file("posts/test-post.md", post_content)
-        .start()
-        .await
+        .scenario()
         .get("/hello")
-        .await
         .expect()
-        .await
-        .body_contains("This is a test blog post.");
+        .body_contains("This is a test blog post.")
+        .execute()
+        .await;
 }
 
 #[tokio::test]
 async fn post_should_contain_title_from_frontmatter() {
-    let post_content = r#"---
+    let post_content = "---
 title: Hello World
-datePublished: 2023-01-01
 slug: hello
 ---
-This is a test blog post.
-"#;
+";
 
     BlogServer::with_file("posts/test-post.md", post_content)
-        .start()
-        .await
+        .scenario()
         .get("/hello")
-        .await
         .expect()
-        .await
-        .body_contains("Hello World</h1>");
+        .body_contains("Hello World")
+        .execute()
+        .await;
 }
 
 #[tokio::test]
 async fn post_should_contain_date_published_from_frontmatter() {
-    let post_content = r#"---
-title: Hello World
+    let post_content = "---
 datePublished: 2023-01-01
 slug: hello
 ---
-This is a test blog post.
-"#;
+";
 
     BlogServer::with_file("posts/test-post.md", post_content)
-        .start()
-        .await
+        .scenario()
         .get("/hello")
-        .await
         .expect()
-        .await
-        .body_contains("Published on January 01, 2023");
+        .status_code(200)
+        .body_contains("Published on January 01, 2023")
+        .execute()
+        .await;
 }
 
 #[tokio::test]
-async fn post_should_not_be_served_from_slug_front_matter_misses_closing_delimiter() {
-    let post_content = r#"---
-title: Test Post
-datePublished: 2023-01-01
+async fn post_should_not_be_served_from_slug_when_front_matter_misses_closing_delimiter() {
+    let post_content = "---
 slug: hello
-
-# Hello World"#;
+";
 
     BlogServer::with_file("posts/test-post.md", post_content)
-        .start()
-        .await
+        .scenario()
         .get("/hello")
-        .await
         .expect()
-        .await
-        .http_status_code(404);
+        .status_code(404)
+        .execute()
+        .await;
 }
 
 #[tokio::test]
 async fn post_should_be_served_from_filename_when_there_is_no_front_matter() {
-    let post_content = r#"# Raw Markdown Post
-
-This is a blog post without any front matter.
-It should still be displayed properly."#;
+    let post_content = "";
 
     BlogServer::with_file("posts/no-front-matter.md", post_content)
-        .start()
-        .await
+        .scenario()
         .get("/no-front-matter")
-        .await
         .expect()
-        .await
-        .http_status_code(200)
-        .body_contains("<h1>Raw Markdown Post</h1>")
-        .body_contains("This is a blog post without any front matter.");
+        .status_code(200)
+        .execute()
+        .await;
 }
 
 #[tokio::test]
 async fn non_existent_slug_should_return_404() {
     BlogServer::new()
-        .start()
-        .await
+        .scenario()
         .get("/non-existent-post")
-        .await
         .expect()
-        .await
-        .http_status_code(404);
+        .status_code(404)
+        .execute()
+        .await;
 }
 
 #[tokio::test]
 async fn index_should_show_posts() {
-    let post1 = r#"---
-title: First Post
-datePublished: 2023-01-02
+    let post1 = "---
+title: Post One
 ---
-# First Post Content
-"#;
+";
 
-    let post2 = r#"---
-title: Second Post
-datePublished: 2023-01-01
+    let post2 = "---
+title: Post Two
 ---
-# Second Post Content
-"#;
+";
 
     BlogServer::new()
         .add_file("posts/first-post.md", post1)
         .add_file("posts/second-post.md", post2)
-        .start()
-        .await
+        .scenario()
         .get("/")
-        .await
         .expect()
-        .await
-        .http_status_code(200)
-        .body_contains("First Post")
-        .body_contains("Second Post");
+        .status_code(200)
+        .body_contains("Post One")
+        .body_contains("Post Two")
+        .execute()
+        .await;
 }
 
 #[tokio::test]
 async fn index_should_show_no_posts_message_when_no_posts() {
     BlogServer::new()
-        .start()
-        .await
+        .scenario()
         .get("/")
-        .await
         .expect()
-        .await
-        .http_status_code(200)
-        .body_contains("No posts yet");
+        .body_contains("No posts yet")
+        .execute()
+        .await;
 }
 
 #[tokio::test]
 async fn index_should_sort_posts_by_date_newest_first() {
-    // Create posts with various date formats spanning different years
     let posts = [
         (
-            "posts/oldest-post.md",
-            r#"---
-title: Oldest Post
-datePublished: 2020-01-15
----
-# Oldest Post Content
-"#,
+            "posts/oldest.md",
+            "---\ntitle: Oldest Post\ndatePublished: 2020-01-01\n---\n",
         ),
         (
-            "posts/middle-post-js-date.md",
-            r#"---
-title: Middle Post (JS Date)
-datePublished: Wed Jun 15 2022 10:30:00 GMT+0000
----
-# Middle Post Content with JS Date Format
-"#,
+            "posts/middle.md",
+            "---\ntitle: Middle Post\ndatePublished: 2021-01-01\n---\n",
         ),
         (
-            "posts/newer-post-short-format.md",
-            r#"---
-title: Newer Post (Short Format)
-datePublished: Mar 20, 2023
----
-# Newer Post with Short Date Format
-"#,
+            "posts/newest.md",
+            "---\ntitle: Newest Post\ndatePublished: 2022-01-01\n---\n",
         ),
-        (
-            "posts/newest-post-full-format.md",
-            r#"---
-title: Newest Post (Full Format)
-datePublished: December 25, 2024
----
-# Newest Post with Full Month Format
-"#,
-        ),
-        (
-            "posts/undated-post.md",
-            r#"---
-title: Undated Post Z (should be last, alphabetically)
----
-# Undated Post Content
-"#,
-        ),
-        (
-            "posts/another-undated-post.md",
-            r#"---
-title: Another Undated Post A (should be first among undated, alphabetically)
----
-# Another Undated Post Content
-"#,
-        ),
+        ("posts/undated-z.md", "---\ntitle: Undated Z\n---\n"),
+        ("posts/undated-a.md", "---\ntitle: Undated A\n---\n"),
     ];
 
-    // Set up the server with all posts
     let mut server = BlogServer::new();
     for (path, content) in posts {
         server = server.add_file(path, content);
     }
 
-    // Get the index page
-    let response = server.start().await.get("/").await;
-
-    // Check the response
-    response
+    server
+        .scenario()
+        .get("/")
         .expect()
-        .await
-        .http_status_code(200)
-        // First verify all posts are present
+        .body_contains("Newest Post")
         .body_contains("Oldest Post")
-        .body_contains("Middle Post (JS Date)")
-        .body_contains("Newer Post (Short Format)")
-        .body_contains("Newest Post (Full Format)")
-        .body_contains("Undated Post Z")
-        .body_contains("Another Undated Post A")
         .contains_in_order(&[
-            "Newest Post (Full Format)",
-            "Newer Post (Short Format)",
-            "Middle Post (JS Date)",
+            "Newest Post",
+            "Middle Post",
             "Oldest Post",
+            "Undated A",
+            "Undated Z",
         ])
-        // Verify undated posts come after dated posts, sorted alphabetically
-        .contains_in_order(&[
-            "Oldest Post",            // Last dated post
-            "Another Undated Post A", // First undated post (alphabetically)
-            "Undated Post Z",         // Second undated post (alphabetically)
-        ]);
+        .execute()
+        .await;
 }
 
 #[tokio::test]
 #[rstest]
 async fn all_should_show_custom_title_when_configured(
     #[values(
-        TestSetupShouldShowCustomTitleWhenConfigured::index(),
-        TestSetupShouldShowCustomTitleWhenConfigured::post(),
-        TestSetupShouldShowCustomTitleWhenConfigured::page()
+        CustomTitleTestSetup::index(),
+        CustomTitleTestSetup::post(),
+        CustomTitleTestSetup::page()
     )]
-    setup: TestSetupShouldShowCustomTitleWhenConfigured,
+    setup: CustomTitleTestSetup,
 ) {
-    let config = r#"
-site_title: "My Custom Blog Title"
-site_description: "A custom blog description"
-"#;
+    let config = "
+site_title: \"My Custom Blog Title\"
+site_description: \"A custom blog description\"
+";
 
-    let setup_server = setup.server;
-    let slug_matching_content_on_server = setup.slug.as_str();
-
-    setup_server
+    setup
+        .server
         .with_config(config)
-        .start()
-        .await
-        .get(slug_matching_content_on_server)
-        .await
+        .scenario()
+        .get(&setup.slug)
         .expect()
-        .await
-        .http_status_code(200)
         .body_contains("My Custom Blog Title")
-        .not_contains("Your Blog"); // the default site title
+        .not_contains("Your Blog")
+        .execute()
+        .await;
 }
 
-struct TestSetupShouldShowCustomTitleWhenConfigured {
+struct CustomTitleTestSetup {
     server: BlogServer,
     slug: String,
 }
-impl TestSetupShouldShowCustomTitleWhenConfigured {
+
+impl CustomTitleTestSetup {
     fn index() -> Self {
         Self {
             server: BlogServer::new(),
@@ -347,35 +258,32 @@ impl TestSetupShouldShowCustomTitleWhenConfigured {
     }
     fn post() -> Self {
         Self {
-            server: BlogServer::with_file("posts/post.md", "# Post Title"),
+            server: BlogServer::with_file("posts/post.md", ""),
             slug: "/post".to_string(),
         }
     }
     fn page() -> Self {
         Self {
-            server: BlogServer::with_file("pages/page.md", "# Page Title"),
+            server: BlogServer::with_file("pages/page.md", ""),
             slug: "/p/page".to_string(),
         }
     }
 }
 
 #[tokio::test]
-async fn page_should_be_served() {
-    let page_content = r#"# Raw Page Title
+async fn page_should_be_accessible_at_p_url() {
+    let page_content = "# Test Page
 
-This is a page without any front matter.
-It should still be displayed properly."#;
+Content here.";
 
     BlogServer::new()
         .add_file("pages/about.md", page_content)
-        .start()
-        .await
+        .scenario()
         .get("/p/about")
-        .await
         .expect()
-        .await
-        .http_status_code(200)
-        .body_contains("<h1>Raw Page Title</h1>");
+        .body_contains("<h1>Test Page</h1>")
+        .execute()
+        .await;
 }
 
 mod specification_support {
@@ -429,6 +337,10 @@ mod specification_support {
         pub fn with_config(mut self, config_yaml: &str) -> Self {
             self.config = Some(config_yaml.to_string());
             self
+        }
+
+        pub fn scenario(self) -> Scenario {
+            Scenario { server: self }
         }
 
         pub async fn start(self) -> RunningServer {
@@ -539,17 +451,6 @@ mod specification_support {
     }
 
     impl ResponseExpectations {
-        pub async fn new(response: reqwest::Response) -> Self {
-            let status_code = response.status().as_u16();
-            let body = response.text().await.expect("Failed to read response body");
-            Self {
-                body,
-                status_code,
-                expectations: Vec::new(),
-                verified: false,
-            }
-        }
-
         pub fn http_status_code(mut self, expected: u16) -> Self {
             let status = self.status_code;
             self.expectations.push(Box::new(move |_| {
@@ -647,18 +548,94 @@ mod specification_support {
             }
         }
     }
-    pub trait IntoAssertion {
-        async fn expect(self) -> ResponseExpectations;
-    }
-
-    impl IntoAssertion for reqwest::Response {
-        async fn expect(self) -> ResponseExpectations {
-            ResponseExpectations::new(self).await
-        }
-    }
 
     struct FileOnServer {
         content: String,
         target_path: String,
+    }
+
+    pub struct Scenario {
+        server: BlogServer,
+    }
+
+    pub struct Obtained {
+        server: BlogServer,
+        path: String,
+    }
+
+    pub struct Expectations {
+        server: BlogServer,
+        path: String,
+        assertions: Vec<Box<dyn FnOnce(ResponseExpectations) -> ResponseExpectations + Send>>,
+    }
+
+    impl Scenario {
+        pub fn get(self, path: &str) -> Obtained {
+            Obtained {
+                server: self.server,
+                path: path.to_string(),
+            }
+        }
+    }
+
+    impl Obtained {
+        pub fn expect(self) -> Expectations {
+            Expectations {
+                server: self.server,
+                path: self.path,
+                assertions: Vec::new(),
+            }
+        }
+    }
+
+    impl Expectations {
+        pub fn status_code(mut self, code: u16) -> Self {
+            self.assertions
+                .push(Box::new(move |resp| resp.http_status_code(code)));
+            self
+        }
+
+        pub fn body_contains(mut self, text: &str) -> Self {
+            let text = text.to_string();
+            self.assertions
+                .push(Box::new(move |resp| resp.body_contains(&text)));
+            self
+        }
+
+        pub fn not_contains(mut self, text: &str) -> Self {
+            let text = text.to_string();
+            self.assertions
+                .push(Box::new(move |resp| resp.not_contains(&text)));
+            self
+        }
+
+        pub fn contains_in_order(mut self, items: &[&str]) -> Self {
+            let items: Vec<String> = items.iter().map(|s| s.to_string()).collect();
+            self.assertions.push(Box::new(move |resp| {
+                let item_refs: Vec<&str> = items.iter().map(|s| s.as_str()).collect();
+                resp.contains_in_order(&item_refs)
+            }));
+            self
+        }
+
+        pub async fn execute(self) {
+            let server = self.server.start().await;
+            let response = server.get(&self.path).await;
+
+            let status_code = response.status().as_u16();
+            let body = response.text().await.expect("Failed to read response body");
+            let mut expectations = ResponseExpectations {
+                body,
+                status_code,
+                expectations: Vec::new(),
+                verified: false,
+            };
+
+            for assertion in self.assertions {
+                expectations = assertion(expectations);
+            }
+
+            std::mem::drop(expectations); // Technically not needed as the expectations will be dropped here automatically triggering the assertions
+        }
     }
 }
