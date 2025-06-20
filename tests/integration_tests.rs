@@ -5,7 +5,6 @@ use crate::specification_support::BlogServer;
 #[tokio::test]
 async fn health_endpoint_should_return_200() {
     BlogServer::new()
-        .scenario()
         .get("/health")
         .expect_status_code(200)
         .execute()
@@ -24,7 +23,6 @@ This is a test blog post.
 ";
 
     BlogServer::with_file("posts/test-post.md", post_content)
-        .scenario()
         .get("/test-post")
         .expect_status_code(200)
         .execute()
@@ -39,7 +37,6 @@ slug: hello
 ";
 
     BlogServer::with_file("posts/test-post.md", post_content)
-        .scenario()
         .get("/hello")
         .expect_status_code(200)
         .execute()
@@ -55,7 +52,6 @@ This is a test blog post.
 ";
 
     BlogServer::with_file("posts/test-post.md", post_content)
-        .scenario()
         .get("/hello")
         .expect_body_contains("This is a test blog post.")
         .execute()
@@ -71,7 +67,6 @@ slug: hello
 ";
 
     BlogServer::with_file("posts/test-post.md", post_content)
-        .scenario()
         .get("/hello")
         .expect_body_contains("Hello World")
         .execute()
@@ -87,7 +82,6 @@ slug: hello
 ";
 
     BlogServer::with_file("posts/test-post.md", post_content)
-        .scenario()
         .get("/hello")
         .expect_status_code(200)
         .expect_body_contains("Published on January 01, 2023")
@@ -102,7 +96,6 @@ slug: hello
 "; // missing closing delimiter
 
     BlogServer::with_file("posts/test-post.md", post_content)
-        .scenario()
         .get("/hello")
         .expect_status_code(404)
         .execute()
@@ -114,7 +107,6 @@ async fn post_should_be_accessible_via_filename_when_no_frontmatter() {
     let post_content = "";
 
     BlogServer::with_file("posts/no-front-matter.md", post_content)
-        .scenario()
         .get("/no-front-matter")
         .expect_status_code(200)
         .execute()
@@ -124,7 +116,6 @@ async fn post_should_be_accessible_via_filename_when_no_frontmatter() {
 #[tokio::test]
 async fn server_should_return_404_when_post_not_found() {
     BlogServer::new()
-        .scenario()
         .get("/non-existent-post")
         .expect_status_code(404)
         .execute()
@@ -146,7 +137,6 @@ title: Post Two
     BlogServer::new()
         .add_file("posts/first-post.md", post1)
         .add_file("posts/second-post.md", post2)
-        .scenario()
         .get("/")
         .expect_body_contains("Post One")
         .expect_body_contains("Post Two")
@@ -157,7 +147,6 @@ title: Post Two
 #[tokio::test]
 async fn index_should_display_empty_message_when_no_posts() {
     BlogServer::new()
-        .scenario()
         .get("/")
         .expect_body_contains("No posts yet")
         .execute()
@@ -189,7 +178,6 @@ async fn index_should_sort_posts_by_date_descending() {
     }
 
     server
-        .scenario()
         .get("/")
         .expect_body_contains("Newest Post")
         .expect_body_contains("Oldest Post")
@@ -222,7 +210,6 @@ site_description: \"A custom blog description\"
     setup
         .server
         .with_config(config)
-        .scenario()
         .get(&setup.slug)
         .expect_body_contains("My Custom Blog Title")
         .expect_not_contains("Your Blog")
@@ -264,7 +251,6 @@ Content here.";
 
     BlogServer::new()
         .add_file("pages/about.md", page_content)
-        .scenario()
         .get("/p/about")
         .expect_body_contains("<h1>Test Page</h1>")
         .execute()
@@ -293,6 +279,14 @@ mod specification_support {
             BlogServer {
                 content_on_server: Vec::new(),
                 config: None,
+            }
+        }
+
+        pub fn get(self, path: &str) -> Obtained {
+            Obtained {
+                server: self, // BlogServer now directly owns itself in Obtained
+                path: path.to_string(),
+                assertions: Vec::new(),
             }
         }
 
@@ -326,10 +320,6 @@ mod specification_support {
             self
         }
 
-        pub fn scenario(self) -> Scenario {
-            Scenario { server: self }
-        }
-
         async fn start(self) -> RunningServer {
             let temp_dir = TempDir::new().unwrap();
             let temp_path = temp_dir.path().to_owned();
@@ -355,20 +345,6 @@ mod specification_support {
             let (server_addr, shutdown_tx, server_handle) = start_test_server(app).await;
 
             RunningServer::new(server_addr, shutdown_tx, server_handle, temp_dir)
-        }
-    }
-
-    pub struct Scenario {
-        server: BlogServer,
-    }
-
-    impl Scenario {
-        pub fn get(self, path: &str) -> Obtained {
-            Obtained {
-                server: self.server,
-                path: path.to_string(),
-                assertions: Vec::new(),
-            }
         }
     }
 
