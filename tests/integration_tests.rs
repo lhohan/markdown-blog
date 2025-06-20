@@ -7,8 +7,7 @@ async fn health_endpoint_should_return_200() {
     BlogServer::new()
         .scenario()
         .get("/health")
-        .expect()
-        .status_code(200)
+        .expect_status_code(200)
         .execute()
         .await;
 }
@@ -27,8 +26,7 @@ This is a test blog post.
     BlogServer::with_file("posts/test-post.md", post_content)
         .scenario()
         .get("/test-post")
-        .expect()
-        .status_code(200)
+        .expect_status_code(200)
         .execute()
         .await;
 }
@@ -43,8 +41,7 @@ slug: hello
     BlogServer::with_file("posts/test-post.md", post_content)
         .scenario()
         .get("/hello")
-        .expect()
-        .status_code(200)
+        .expect_status_code(200)
         .execute()
         .await;
 }
@@ -60,8 +57,7 @@ This is a test blog post.
     BlogServer::with_file("posts/test-post.md", post_content)
         .scenario()
         .get("/hello")
-        .expect()
-        .body_contains("This is a test blog post.")
+        .expect_body_contains("This is a test blog post.")
         .execute()
         .await;
 }
@@ -77,8 +73,7 @@ slug: hello
     BlogServer::with_file("posts/test-post.md", post_content)
         .scenario()
         .get("/hello")
-        .expect()
-        .body_contains("Hello World")
+        .expect_body_contains("Hello World")
         .execute()
         .await;
 }
@@ -94,9 +89,8 @@ slug: hello
     BlogServer::with_file("posts/test-post.md", post_content)
         .scenario()
         .get("/hello")
-        .expect()
-        .status_code(200)
-        .body_contains("Published on January 01, 2023")
+        .expect_status_code(200)
+        .expect_body_contains("Published on January 01, 2023")
         .execute()
         .await;
 }
@@ -105,13 +99,12 @@ slug: hello
 async fn post_should_return_404_when_frontmatter_malformed() {
     let post_content = "---
 slug: hello
-";
+"; // missing closing delimiter
 
     BlogServer::with_file("posts/test-post.md", post_content)
         .scenario()
         .get("/hello")
-        .expect()
-        .status_code(404)
+        .expect_status_code(404)
         .execute()
         .await;
 }
@@ -123,8 +116,7 @@ async fn post_should_be_accessible_via_filename_when_no_frontmatter() {
     BlogServer::with_file("posts/no-front-matter.md", post_content)
         .scenario()
         .get("/no-front-matter")
-        .expect()
-        .status_code(200)
+        .expect_status_code(200)
         .execute()
         .await;
 }
@@ -134,8 +126,7 @@ async fn server_should_return_404_when_post_not_found() {
     BlogServer::new()
         .scenario()
         .get("/non-existent-post")
-        .expect()
-        .status_code(404)
+        .expect_status_code(404)
         .execute()
         .await;
 }
@@ -157,10 +148,8 @@ title: Post Two
         .add_file("posts/second-post.md", post2)
         .scenario()
         .get("/")
-        .expect()
-        .status_code(200)
-        .body_contains("Post One")
-        .body_contains("Post Two")
+        .expect_body_contains("Post One")
+        .expect_body_contains("Post Two")
         .execute()
         .await;
 }
@@ -170,8 +159,7 @@ async fn index_should_display_empty_message_when_no_posts() {
     BlogServer::new()
         .scenario()
         .get("/")
-        .expect()
-        .body_contains("No posts yet")
+        .expect_body_contains("No posts yet")
         .execute()
         .await;
 }
@@ -203,10 +191,9 @@ async fn index_should_sort_posts_by_date_descending() {
     server
         .scenario()
         .get("/")
-        .expect()
-        .body_contains("Newest Post")
-        .body_contains("Oldest Post")
-        .contains_in_order(&[
+        .expect_body_contains("Newest Post")
+        .expect_body_contains("Oldest Post")
+        .expect_contains_in_order(&[
             "Newest Post",
             "Middle Post",
             "Oldest Post",
@@ -237,9 +224,8 @@ site_description: \"A custom blog description\"
         .with_config(config)
         .scenario()
         .get(&setup.slug)
-        .expect()
-        .body_contains("My Custom Blog Title")
-        .not_contains("Your Blog")
+        .expect_body_contains("My Custom Blog Title")
+        .expect_not_contains("Your Blog")
         .execute()
         .await;
 }
@@ -280,8 +266,7 @@ Content here.";
         .add_file("pages/about.md", page_content)
         .scenario()
         .get("/p/about")
-        .expect()
-        .body_contains("<h1>Test Page</h1>")
+        .expect_body_contains("<h1>Test Page</h1>")
         .execute()
         .await;
 }
@@ -382,6 +367,7 @@ mod specification_support {
             Obtained {
                 server: self.server,
                 path: path.to_string(),
+                assertions: Vec::new(),
             }
         }
     }
@@ -389,26 +375,11 @@ mod specification_support {
     pub struct Obtained {
         server: BlogServer,
         path: String,
-    }
-
-    impl Obtained {
-        pub fn expect(self) -> Expectations {
-            Expectations {
-                server: self.server,
-                path: self.path,
-                assertions: Vec::new(),
-            }
-        }
-    }
-
-    pub struct Expectations {
-        server: BlogServer,
-        path: String,
         assertions: Vec<Box<dyn FnOnce(&Response) + Send>>,
     }
 
-    impl Expectations {
-        pub fn status_code(mut self, expected: u16) -> Self {
+    impl Obtained {
+        pub fn expect_status_code(mut self, expected: u16) -> Self {
             self.assertions.push(Box::new(move |response| {
                 assert_eq!(
                     response.status_code, expected,
@@ -419,8 +390,8 @@ mod specification_support {
             self
         }
 
-        pub fn body_contains(mut self, text: &str) -> Self {
-            let text = text.to_string();
+        pub fn expect_body_contains(mut self, text: &str) -> Self {
+            let text = text.to_string(); // Clone to move into the closure
             self.assertions.push(Box::new(move |response| {
                 assert!(
                     response.body.contains(&text),
@@ -432,8 +403,8 @@ mod specification_support {
             self
         }
 
-        pub fn not_contains(mut self, text: &str) -> Self {
-            let text = text.to_string();
+        pub fn expect_not_contains(mut self, text: &str) -> Self {
+            let text = text.to_string(); // Clone to move into the closure
             self.assertions.push(Box::new(move |response| {
                 assert!(
                     !response.body.contains(&text),
@@ -445,36 +416,36 @@ mod specification_support {
             self
         }
 
-        pub fn contains_in_order(mut self, items: &[&str]) -> Self {
+        pub fn expect_contains_in_order(mut self, items: &[&str]) -> Self {
             // TODO: Review this implementation. Seems to work but copy-pasted from Claude.
             let items: Vec<String> = items.iter().map(|s| s.to_string()).collect();
             self.assertions.push(Box::new(move |response| {
-                let mut last_pos = 0;
+                    let mut last_pos = 0;
 
-                for (i, substring) in items.iter().enumerate() {
-                    match response.body[last_pos..].find(substring) {
-                        Some(pos) => {
-                            last_pos += pos + substring.len();
+                    for (i, substring) in items.iter().enumerate() {
+                        match response.body[last_pos..].find(substring) {
+                            Some(pos) => {
+                                last_pos += pos + substring.len();
+                            }
+                            None => {
+                                panic!(
+                                    "Expected to find '{}' after position {}. Items should appear in order: {:?}. Full body:\n{}",
+                                    substring, last_pos, items, response.body
+                                );
+                            }
                         }
-                        None => {
-                            panic!(
-                                "Expected to find '{}' after position {}. Items should appear in order: {:?}. Full body:\n{}",
-                                substring, last_pos, items, response.body
-                            );
+
+                        if i < items.len() - 1 {
+                            let next = &items[i + 1];
+                            if response.body[last_pos..].find(next).is_none() {
+                                panic!(
+                                    "Expected to find '{}' after '{}', but it was not found. Full body:\n{}",
+                                    next, substring, response.body
+                                );
+                            }
                         }
                     }
-
-                    if i < items.len() - 1 {
-                        let next = &items[i + 1];
-                        if response.body[last_pos..].find(next).is_none() {
-                            panic!(
-                                "Expected to find '{}' after '{}', but it was not found. Full body:\n{}",
-                                next, substring, response.body
-                            );
-                        }
-                    }
-                }
-            }));
+                }));
             self
         }
 
@@ -490,7 +461,7 @@ mod specification_support {
                     .expect("Failed to read response body"),
             };
 
-            // Run all assertions
+            // Run all assertions collected
             for assertion in self.assertions {
                 assertion(&response);
             }
