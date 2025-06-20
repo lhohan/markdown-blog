@@ -13,14 +13,7 @@ async fn health_endpoint_should_return_200() {
 
 #[tokio::test]
 async fn post_should_be_accessible_via_filename() {
-    let post_content = "---
-title: Test Post
-datePublished: 2023-01-01
----
-# Hello World
-
-This is a test blog post.
-";
+    let post_content = ""; // content not relevant for test
 
     BlogServer::with_file("posts/test-post.md", post_content)
         .get("/test-post")
