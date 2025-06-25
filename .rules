@@ -41,3 +41,61 @@
 
 - Lead with concrete usage examples
 - Anchor documentation near usage context
+
+# Test Naming Convention Guidelines
+
+## Format
+```
+[subject]_should_[expected_behavior]_[optional_when_condition]
+```
+
+## Components
+
+**Subject**: The component, feature, or system under test
+- Examples: `user`, `order`, `notification`, `search`, `payment`
+
+**Expected Behavior**: What should happen, described as an action or outcome
+- Examples: `be_created`, `send_confirmation`, `show_results`, `be_declined`
+
+**Optional When Condition**: Include only when necessary for clarity or disambiguation
+- Format: `when_[condition]`
+- Examples: `when_email_invalid`, `when_balance_insufficient`, `when_no_results_found`
+
+## Guidelines for When Conditions
+
+### Include `when_[condition]` if:
+- **Essential for understanding**: The condition is crucial to know what's being tested
+- **Multiple variants exist**: Similar tests with different conditions need distinction
+- **Specific circumstances**: The behavior only occurs under particular conditions
+
+### Omit `when_[condition]` for:
+- **Basic/default behavior**: Standard functionality that doesn't require special conditions
+- **Self-evident scenarios**: Cases where the expected behavior already implies the context
+- **Overly obvious conditions**: When the condition adds no meaningful information
+
+## Examples
+
+**Good (concise when appropriate):**
+```
+user_should_receive_welcome_email
+order_should_be_confirmed
+search_should_show_no_results_when_query_empty
+payment_should_be_declined_when_card_expired
+```
+
+**Avoid (unnecessarily verbose):**
+```
+user_should_receive_welcome_email_when_registration_complete  // completion is implied
+order_should_be_confirmed_when_payment_successful  // success is implied by confirmation
+```
+
+**Good (meaningful distinctions):**
+```
+user_should_login_successfully_when_credentials_correct
+user_should_be_rejected_when_credentials_incorrect
+notification_should_be_sent_immediately_when_urgent
+notification_should_be_queued_when_non_urgent
+```
+
+## Principle
+Keep test names **as short as possible while maintaining clarity**. The `when_` clause is a tool for disambiguation, not a mandatory requirement.
