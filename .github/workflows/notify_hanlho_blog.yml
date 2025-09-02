@@ -1,4 +1,4 @@
-name: Notify hanlho_blog repo for deployment of content in this repo
+name: Notify hanlho_blog repo for deployment
 on:
   workflow_run:
     workflows: ["Tests"]
